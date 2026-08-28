@@ -37,9 +37,14 @@ function Install-Codex {
     } else {
         $arch = if ((Get-Arch) -eq 'arm64') { 'aarch64' } else { 'x86_64' }
         $tmp = New-TempDir
-        Fetch "https://github.com/openai/codex/releases/latest/download/codex-$arch-pc-windows-msvc.exe.zip" (Join-Path $tmp 'codex.zip')
-        Expand-Archive (Join-Path $tmp 'codex.zip') -DestinationPath $tmp -Force
-        Install-Bin (Get-ChildItem $tmp -Filter 'codex*.exe' | Select-Object -First 1).FullName 'codex.exe'
+        # codex-code-mode-host is a separate release asset that codex expects
+        # next to itself (plugin management, "code mode").
+        foreach ($name in 'codex', 'codex-code-mode-host') {
+            $dir = Join-Path $tmp $name
+            Fetch "https://github.com/openai/codex/releases/latest/download/$name-$arch-pc-windows-msvc.exe.zip" "$dir.zip"
+            Expand-Archive "$dir.zip" -DestinationPath $dir -Force
+            Install-Bin (Get-ChildItem $dir -Filter '*.exe' | Select-Object -First 1).FullName "$name.exe"
+        }
         Remove-Item $tmp -Recurse -Force
     }
     Refresh-Path

@@ -50,5 +50,29 @@ if (Test-Path (Join-Path $script:ClaudeSkills 'code-cortex\SKILL.md')) {
     Warn "skill not found at $(Join-Path $script:ClaudeSkills 'code-cortex')"
 }
 
+# ---- skills kept in this repository -------------------------------------
+# ~\.claude\skills\<name> -> $DevenvHome\skills\<name> (symlink, or a junction
+# when symlinks need elevation). An existing directory that is not our link is
+# left alone unless -Force, which moves it to .devenv-backup first.
+Log "repository skills ($(Join-Path $script:DevenvHome 'skills'))"
+New-Item -ItemType Directory -Force -Path $script:ClaudeSkills | Out-Null
+Get-ChildItem (Join-Path $script:DevenvHome 'skills') -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'SKILL.md') } | ForEach-Object {
+    $name = $_.Name; $src = $_.FullName; $dest = Join-Path $script:ClaudeSkills $name
+    if (Test-Path $dest) {
+        $item = Get-Item $dest -Force
+        if ($item.LinkType -and ($item.Target -contains $src)) { Ok "$name linked"; return }
+        if (-not $Force) { Warn "$name: $dest exists and is not our link; -Force to replace (the old copy is kept in .devenv-backup)"; return }
+        if ($item.LinkType) { $item.Delete() }
+        else {
+            $bak = Join-Path $script:ClaudeSkills ".devenv-backup\$name-$(Get-Date -Format yyyyMMddHHmmss)"
+            New-Item -ItemType Directory -Force -Path (Split-Path $bak) | Out-Null
+            Move-Item $dest $bak; Warn "$name: moved the previous copy to $bak"
+        }
+    }
+    try { New-Item -ItemType SymbolicLink -Path $dest -Target $src | Out-Null }
+    catch { New-Item -ItemType Junction -Path $dest -Target $src | Out-Null }
+    Ok "linked $dest -> $src"
+}
+
 Log 'sync skills to every agent'
-& (Join-Path $script:DevenvHome 'scripts\devenv-sync-skills.ps1')
+& (Join-Path $script:DevenvHome 'scripts\devenv-sync-skills.ps1') -Force:$Force

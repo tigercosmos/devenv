@@ -16,6 +16,10 @@ check_tool() {   # check_tool NAME VERSION-CMD...
 log "dependencies"
 check_tool gh gh --version
 check_tool codex codex --version
+if [ "$(command -v codex 2>/dev/null)" = "$LOCAL_BIN/codex" ]; then
+    if [ -x "$LOCAL_BIN/codex-code-mode-host" ]; then ok "codex-code-mode-host  ($LOCAL_BIN/codex-code-mode-host)"
+    else fail "codex-code-mode-host missing next to $LOCAL_BIN/codex (run: make deps)"; rc=1; fi
+fi
 check_tool claude claude --version
 check_tool agent agent --version
 
@@ -30,13 +34,22 @@ for s in codexmon code-cortex; do
     if [ -f "$CLAUDE_SKILLS/$s/SKILL.md" ]; then ok "skill $s -> $CLAUDE_SKILLS/$s"
     else fail "skill $s missing from $CLAUDE_SKILLS"; rc=1; fi
 done
+for d in "$DEVENV_HOME"/skills/*/; do
+    d=${d%/}; s=$(basename "$d"); [ -f "$d/SKILL.md" ] || continue
+    if [ "$(readlink "$CLAUDE_SKILLS/$s" 2>/dev/null)" = "$d" ]; then ok "skill $s -> $d"
+    elif [ -f "$CLAUDE_SKILLS/$s/SKILL.md" ]; then warn "skill $s is a local copy, not linked to $d (FORCE=1 make skills)"
+    else fail "skill $s missing from $CLAUDE_SKILLS (run: make skills)"; rc=1; fi
+done
 for agent_dir in "$HOME/.codex/skills" "$HOME/.agents/skills" "$HOME/.cursor/skills"; do
-    missing=()
+    missing=(); stale=()
     for d in "$CLAUDE_SKILLS"/*/; do
-        d=${d%/}; [ -e "$agent_dir/$(basename "$d")" ] || missing+=("$(basename "$d")")
+        d=${d%/}; [ -d "$d" ] || continue; n=$(basename "$d"); e="$agent_dir/$n"
+        if [ ! -e "$e" ]; then missing+=("$n")
+        elif [ "$(readlink "$e" 2>/dev/null)" != "$d" ] && [ "$(readlink -f "$e")" != "$(readlink -f "$d")" ]; then stale+=("$n"); fi
     done
-    if [ ${#missing[@]} -eq 0 ]; then ok "$agent_dir has every skill"
-    else warn "$agent_dir is missing: ${missing[*]}  (run devenv-sync-skills)"; fi
+    if [ ${#missing[@]} -eq 0 ] && [ ${#stale[@]} -eq 0 ]; then ok "$agent_dir has every skill"; fi
+    [ ${#missing[@]} -gt 0 ] && warn "$agent_dir is missing: ${missing[*]}  (run devenv-sync-skills)"
+    [ ${#stale[@]} -gt 0 ] && warn "$agent_dir has a local copy, not a link, of: ${stale[*]}  (FORCE=1 devenv-sync-skills)"
 done
 if have claude; then
     if claude mcp get code-cortex-mcp >/dev/null 2>&1; then ok "claude mcp: code-cortex-mcp registered"

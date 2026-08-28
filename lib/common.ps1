@@ -53,16 +53,28 @@ function Add-UserPath($dir) {
 }
 
 # Link every skill under ~/.claude/skills into another agent's skills directory.
-function Sync-Skills($target) {
+# An entry that is not our link is left alone unless -Force, which relinks it
+# (a real directory is moved to <target>\.devenv-backup first, never deleted).
+function Sync-Skills($target, [switch]$Force) {
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     Get-ChildItem $script:ClaudeSkills -Directory | ForEach-Object {
-        $dest = Join-Path $target $_.Name
-        if (Test-Path $dest) { return }
-        try {
-            New-Item -ItemType SymbolicLink -Path $dest -Target $_.FullName | Out-Null
-        } catch {
-            New-Item -ItemType Junction -Path $dest -Target $_.FullName | Out-Null
+        $src = $_.FullName; $dest = Join-Path $target $_.Name
+        if (Test-Path $dest) {
+            $item = Get-Item $dest -Force
+            if ($item.LinkType -and ($item.Target -contains $src)) { return }
+            if (-not $Force) { Warn "$dest is not a link to $src; -Force to relink"; return }
+            if ($item.LinkType) { $item.Delete() }
+            else {
+                $bak = Join-Path $target ".devenv-backup\$($_.Name)-$(Get-Date -Format yyyyMMddHHmmss)"
+                New-Item -ItemType Directory -Force -Path (Split-Path $bak) | Out-Null
+                Move-Item $dest $bak; Warn "moved $dest to $bak"
+            }
         }
-        Ok "linked $dest -> $($_.FullName)"
+        try {
+            New-Item -ItemType SymbolicLink -Path $dest -Target $src | Out-Null
+        } catch {
+            New-Item -ItemType Junction -Path $dest -Target $src | Out-Null
+        }
+        Ok "linked $dest -> $src"
     }
 }

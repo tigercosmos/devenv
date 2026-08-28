@@ -4,7 +4,9 @@
 #   ~/.codex/skills   (Codex CLI)
 #   ~/.agents/skills  (cross-agent convention)
 #   ~/.cursor/skills  (Cursor agent)
-# Existing entries are never touched. Dangling links left by removed skills are pruned.
+# An existing entry that is not our link is reported and left alone; with
+# FORCE=1 it is relinked (a real directory is moved to <target>/.devenv-backup/
+# first, never deleted). Dangling links left by removed skills are pruned.
 set -euo pipefail
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
@@ -17,15 +19,25 @@ for target in "${targets[@]}"; do
     for link in "$target"/*; do
         [ -L "$link" ] && [ ! -e "$link" ] && { rm -f "$link"; warn "pruned dangling $link"; }
     done
-    linked=0
+    changed=0
     for src in "$CLAUDE_SKILLS"/*/; do
         src=${src%/}; name=$(basename "$src")
         dest="$target/$name"
-        [ -e "$dest" ] || [ -L "$dest" ] && continue
-        # skip a skill that is itself a link back into this target (avoid loops)
-        [ "$(readlink -f "$src" 2>/dev/null || echo "$src")" = "$(readlink -f "$dest" 2>/dev/null || echo)" ] && continue
+        if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then continue; fi
+        # the same directory reached another way (e.g. ~/.claude/skills/x is
+        # itself a link into this target): nothing to do
+        [ -e "$dest" ] && [ "$(readlink -f "$src")" = "$(readlink -f "$dest")" ] && continue
+        if [ -L "$dest" ]; then
+            if [ "$FORCE" != 1 ]; then warn "$dest -> $(readlink "$dest") is not ours; FORCE=1 to relink"; continue; fi
+            rm -f "$dest"
+        elif [ -e "$dest" ]; then
+            if [ "$FORCE" != 1 ]; then warn "$dest is a local copy, not a link to $src; FORCE=1 to relink (the copy is kept in .devenv-backup)"; continue; fi
+            bak="$target/.devenv-backup/$name-$(date +%Y%m%d%H%M%S)"
+            mkdir -p "$(dirname "$bak")"; mv "$dest" "$bak"
+            warn "moved $dest to $bak"
+        fi
         ln -s "$src" "$dest"
-        ok "linked $dest -> $src"; linked=$((linked+1))
+        ok "linked $dest -> $src"; changed=$((changed+1))
     done
-    if [ $linked -eq 0 ]; then ok "$target up to date"; fi
+    if [ $changed -eq 0 ]; then ok "$target up to date"; fi
 done

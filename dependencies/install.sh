@@ -51,14 +51,28 @@ codex_from_release() {
         *) die "codex: use dependencies/install.ps1 on Windows" ;;
     esac
     mktmp
-    fetch "https://github.com/openai/codex/releases/latest/download/codex-${triple}.tar.gz" "$TMPD/codex.tar.gz"
-    tar -xzf "$TMPD/codex.tar.gz" -C "$TMPD"
-    install_bin "$TMPD/codex-${triple}" codex
+    # The release ships helper binaries as separate assets. codex looks for
+    # codex-code-mode-host next to itself (plugin management, "code mode");
+    # without it `codex` reports the executable as missing.
+    local name
+    for name in codex codex-code-mode-host; do
+        fetch "https://github.com/openai/codex/releases/latest/download/${name}-${triple}.tar.gz" "$TMPD/$name.tar.gz"
+        tar -xzf "$TMPD/$name.tar.gz" -C "$TMPD"
+        install_bin "$TMPD/${name}-${triple}" "$name"
+    done
 }
 
 install_codex() {
     log "codex (OpenAI Codex CLI)"
-    if have codex && [ "$FORCE" != 1 ]; then ok "already installed: $(codex --version 2>/dev/null | head -1)"; return; fi
+    if have codex && [ "$FORCE" != 1 ]; then
+        ok "already installed: $(codex --version 2>/dev/null | head -1)"
+        # A release install from an earlier devenv lacks the helper; add it.
+        if [ "$(command -v codex)" = "$LOCAL_BIN/codex" ] && [ ! -x "$LOCAL_BIN/codex-code-mode-host" ]; then
+            warn "codex-code-mode-host is missing next to $LOCAL_BIN/codex; installing"
+            codex_from_release
+        fi
+        return
+    fi
     if have npm; then
         npm install -g @openai/codex@latest
     elif [ "$OS" = macos ] && have brew; then

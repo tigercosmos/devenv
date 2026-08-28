@@ -2,7 +2,7 @@
 #
 #   make install      install dependencies, skills, scripts, and shell config, then run the doctor
 #   make deps         gh, codex, claude, cursor agent
-#   make skills       codexmon, code-cortex-mcp (binaries + agent skills, synced to every agent)
+#   make skills       codexmon, code-cortex-mcp, and the skills in skills/ (linked into ~/.claude/skills, synced to every agent)
 #   make scripts      make the utility scripts executable (they go on PATH via `make shell`)
 #   make shell        wire shell/devenv.sh into the login profile and verify the aliases
 #   make doctor       report what is installed and what is missing

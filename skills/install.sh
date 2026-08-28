@@ -2,8 +2,10 @@
 # skills/install.sh — install the AI skills and tools:
 #   * codexmon         https://github.com/tigercosmos/codexmon
 #   * code-cortex-mcp  https://github.com/tigercosmos/code-cortex-mcp
-# Binaries go to ~/.local/bin, skills to ~/.claude/skills, and every skill is
-# linked into the other agents' skill directories (codex, cursor, ~/.agents).
+#   * every skill kept in this repository (skills/<name>/SKILL.md)
+# Binaries go to ~/.local/bin, skills to ~/.claude/skills (the repository's
+# skills as symlinks, so `git pull` updates them), and every skill is linked
+# into the other agents' skill directories (codex, cursor, ~/.agents).
 #
 #   bash skills/install.sh            # install what is missing
 #   FORCE=1 bash skills/install.sh    # reinstall / upgrade
@@ -70,8 +72,41 @@ install_code_cortex() {
     fi
 }
 
+# ---- skills kept in this repository -------------------------------------
+# ~/.claude/skills/<name> -> $DEVENV_HOME/skills/<name>. A directory that is
+# already there and is not our link is left alone unless FORCE=1, in which
+# case it is moved to ~/.claude/skills/.devenv-backup/ first, never deleted.
+install_repo_skills() {
+    log "repository skills ($DEVENV_HOME/skills)"
+    mkdir -p "$CLAUDE_SKILLS"
+    local src name dest current
+    for src in "$DEVENV_HOME"/skills/*/; do
+        src=${src%/}; name=$(basename "$src")
+        [ -f "$src/SKILL.md" ] || continue
+        dest="$CLAUDE_SKILLS/$name"
+        if [ -L "$dest" ]; then
+            current=$(readlink "$dest")
+            if [ "$current" = "$src" ]; then ok "$name linked"; continue; fi
+            if [ "$FORCE" != 1 ]; then
+                warn "$name: $dest -> $current is not ours; FORCE=1 to relink"; continue
+            fi
+            rm -f "$dest"
+        elif [ -e "$dest" ]; then
+            if [ "$FORCE" != 1 ]; then
+                warn "$name: $dest exists and is not a link; FORCE=1 to replace (the old copy is kept in .devenv-backup)"; continue
+            fi
+            local bak="$CLAUDE_SKILLS/.devenv-backup/$name-$(date +%Y%m%d%H%M%S)"
+            mkdir -p "$(dirname "$bak")"; mv "$dest" "$bak"
+            warn "$name: moved the previous copy to $bak"
+        fi
+        ln -s "$src" "$dest"
+        ok "linked $dest -> $src"
+    done
+}
+
 install_codexmon
 install_code_cortex
+install_repo_skills
 
 log "sync skills to every agent"
 "$DEVENV_HOME/scripts/devenv-sync-skills"
