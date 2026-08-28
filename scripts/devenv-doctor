@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# devenv-doctor — report the state of the devenv environment. Exit 1 if anything is missing.
+set -uo pipefail
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+rc=0
+check_tool() {   # check_tool NAME VERSION-CMD...
+    local name="$1"; shift
+    if have "$name"; then
+        ok "$name  $("$@" 2>&1 | head -1)  ($(command -v "$name"))"
+    else
+        fail "$name is not installed"; rc=1
+    fi
+}
+
+log "dependencies"
+check_tool gh gh --version
+check_tool codex codex --version
+check_tool claude claude --version
+check_tool agent agent --version
+
+log "skills and tools"
+if [ "$(os)" = windows ]; then
+    have codexmon && check_tool codexmon codexmon version || warn "codexmon: not available for Windows"
+else
+    check_tool codexmon codexmon version
+fi
+check_tool code-cortex-mcp code-cortex-mcp --version   # NOT `version`: that starts the server
+for s in codexmon code-cortex; do
+    if [ -f "$CLAUDE_SKILLS/$s/SKILL.md" ]; then ok "skill $s -> $CLAUDE_SKILLS/$s"
+    else fail "skill $s missing from $CLAUDE_SKILLS"; rc=1; fi
+done
+for agent_dir in "$HOME/.codex/skills" "$HOME/.agents/skills" "$HOME/.cursor/skills"; do
+    missing=()
+    for d in "$CLAUDE_SKILLS"/*/; do
+        d=${d%/}; [ -e "$agent_dir/$(basename "$d")" ] || missing+=("$(basename "$d")")
+    done
+    if [ ${#missing[@]} -eq 0 ]; then ok "$agent_dir has every skill"
+    else warn "$agent_dir is missing: ${missing[*]}  (run devenv-sync-skills)"; fi
+done
+if have claude; then
+    if claude mcp get code-cortex-mcp >/dev/null 2>&1; then ok "claude mcp: code-cortex-mcp registered"
+    else fail "claude mcp: code-cortex-mcp not registered (run: code-cortex-mcp install)"; rc=1; fi
+fi
+
+PROFILE=$(profile_file)
+log "shell ($PROFILE)"
+if grep -qF '# >>> devenv >>>' "$PROFILE" 2>/dev/null; then ok "devenv block present"
+else fail "devenv block missing (run: make shell)"; rc=1; fi
+check_aliases "$PROFILE" || rc=1
+for d in "$LOCAL_BIN" "$DEVENV_HOME/scripts"; do
+    case ":$PATH:" in
+        *":$d:"*) ok "PATH contains $d" ;;
+        *) warn "PATH of this shell lacks $d (open a new terminal after make install)" ;;
+    esac
+done
+
+echo
+[ $rc -eq 0 ] && ok "all checks passed" || fail "some checks failed"
+exit $rc

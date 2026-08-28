@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# devenv-update — upgrade every tool devenv manages to its latest release,
+# then re-sync skills and re-check the shell profile.
+set -euo pipefail
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+export FORCE=1
+bash "$DEVENV_HOME/dependencies/install.sh" "$@"
+[ $# -eq 0 ] && bash "$DEVENV_HOME/skills/install.sh"
+[ $# -eq 0 ] && bash "$DEVENV_HOME/shell/install.sh"
+exit 0

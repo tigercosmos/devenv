@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# devenv-sync-skills — make every skill under ~/.claude/skills available to the
+# other agents by symlinking it into their skill directories:
+#   ~/.codex/skills   (Codex CLI)
+#   ~/.agents/skills  (cross-agent convention)
+#   ~/.cursor/skills  (Cursor agent)
+# Existing entries are never touched. Dangling links left by removed skills are pruned.
+set -euo pipefail
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+[ -d "$CLAUDE_SKILLS" ] || die "$CLAUDE_SKILLS does not exist"
+targets=("$HOME/.codex/skills" "$HOME/.agents/skills" "$HOME/.cursor/skills")
+
+for target in "${targets[@]}"; do
+    mkdir -p "$target"
+    # prune dangling symlinks
+    for link in "$target"/*; do
+        [ -L "$link" ] && [ ! -e "$link" ] && { rm -f "$link"; warn "pruned dangling $link"; }
+    done
+    linked=0
+    for src in "$CLAUDE_SKILLS"/*/; do
+        src=${src%/}; name=$(basename "$src")
+        dest="$target/$name"
+        [ -e "$dest" ] || [ -L "$dest" ] && continue
+        # skip a skill that is itself a link back into this target (avoid loops)
+        [ "$(readlink -f "$src" 2>/dev/null || echo "$src")" = "$(readlink -f "$dest" 2>/dev/null || echo)" ] && continue
+        ln -s "$src" "$dest"
+        ok "linked $dest -> $src"; linked=$((linked+1))
+    done
+    if [ $linked -eq 0 ]; then ok "$target up to date"; fi
+done
