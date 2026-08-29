@@ -116,10 +116,13 @@ profile_shell() {
     case "$1" in *zsh*|*zprofile*) echo zsh ;; *) echo bash ;; esac
 }
 
-# Required aliases: name|flag that must appear in the alias body
+# Required aliases: name|flag[|flag...] — the alias body must contain at least
+# one of the flags. Alternatives exist because a flag can have more than one
+# accepted spelling (e.g. claude's --dangerously-skip-permissions is the older
+# name for --permission-mode bypassPermissions).
 REQUIRED_ALIASES='codex|--dangerously-bypass-approvals-and-sandbox
-claude|--permission-mode bypassPermissions
-cc|--permission-mode bypassPermissions'
+claude|--permission-mode bypassPermissions|--dangerously-skip-permissions
+cc|--permission-mode bypassPermissions|--dangerously-skip-permissions'
 
 # eval_in_profile FILE CMD — run CMD in a clean *interactive* shell of the kind
 # that reads FILE, after sourcing FILE. Interactive matters: a stock Ubuntu
@@ -133,18 +136,33 @@ eval_in_profile() {
     fi
 }
 
+# alias_matches DEF FLAGS — true when DEF contains any of the '|'-separated
+# FLAGS. IFS is set locally so the caller's field splitting is untouched.
+alias_matches() {
+    local def="$1" flags="$2" flag
+    local IFS='|'
+    for flag in $flags; do
+        [ -n "$flag" ] || continue
+        [[ "$def" == *"$flag"* ]] && return 0
+    done
+    return 1
+}
+
 # check_aliases FILE — source FILE in a clean shell and verify the required
 # aliases resolve. Prints one ok/fail line per alias; returns 1 on any miss.
 check_aliases() {
-    local file="$1" rc=0 name flag def
+    local file="$1" rc=0 name flags def
     [ -f "$file" ] || { fail "$file does not exist"; return 1; }
-    while IFS='|' read -r name flag; do
+    while IFS='|' read -r name flags; do
         [ -n "$name" ] || continue
         def=$(eval_in_profile "$file" "alias $name")
-        if [ -n "$def" ] && [[ "$def" == *"$flag"* ]]; then
+        if [ -n "$def" ] && alias_matches "$def" "$flags"; then
             ok "alias $name -> ${def#*=}"
         else
-            fail "alias $name is missing '$flag' in $file"
+            case "$flags" in
+                *'|'*) fail "alias $name is missing one of: ${flags//|/, } in $file" ;;
+                *)     fail "alias $name is missing '$flags' in $file" ;;
+            esac
             rc=1
         fi
     done <<< "$REQUIRED_ALIASES"
