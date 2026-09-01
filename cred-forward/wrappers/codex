@@ -1,0 +1,55 @@
+#!/bin/sh
+set -eu
+
+script_path=$0
+while [ -L "$script_path" ]; do
+    script_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P)
+    link_target=$(readlink "$script_path")
+    case $link_target in
+        /*) script_path=$link_target ;;
+        *) script_path=$script_dir/$link_target ;;
+    esac
+done
+wrapper_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P)
+unset script_path script_dir link_target
+# shellcheck source=wrappers/_common.sh
+. "$wrapper_dir/_common.sh"
+
+client=$(cred_forward_client)
+real=$(cred_forward_real codex "${CRED_FORWARD_REAL_CODEX:-}" "$wrapper_dir")
+
+if account_id=$("$client" openaiaccount 2>/dev/null); then
+    if "$client" openaichatgpt >/dev/null 2>&1; then
+        CRED_FORWARD_OPENAI_ACCOUNT_ID=$account_id
+        export CRED_FORWARD_OPENAI_ACCOUNT_ID
+        unset account_id OPENAI_API_KEY
+
+        client_toml=$(cred_forward_toml_string "$client") || exit $?
+        exec "$real" \
+            -c 'model_provider="cred_forward"' \
+            -c 'model_providers.cred_forward.name="OpenAI ChatGPT (forwarded)"' \
+            -c 'model_providers.cred_forward.base_url="https://chatgpt.com/backend-api/codex"' \
+            -c 'model_providers.cred_forward.wire_api="responses"' \
+            -c "model_providers.cred_forward.auth.command=$client_toml" \
+            -c 'model_providers.cred_forward.auth.args=["openaichatgpt"]' \
+            -c 'model_providers.cred_forward.auth.refresh_interval_ms=300000' \
+            -c 'model_providers.cred_forward.env_http_headers={"ChatGPT-Account-Id"="CRED_FORWARD_OPENAI_ACCOUNT_ID"}' \
+            "$@"
+    fi
+    unset account_id
+fi
+
+"$client" openai >/dev/null || exit $?
+unset OPENAI_API_KEY
+client_toml=$(cred_forward_toml_string "$client") || exit $?
+
+# The provider calls cred-client only when it needs a bearer credential. It
+# never invokes `codex login`, so Codex does not create ~/.codex/auth.json.
+exec "$real" \
+    -c 'model_provider="cred_forward"' \
+    -c 'model_providers.cred_forward.name="OpenAI (forwarded)"' \
+    -c 'model_providers.cred_forward.base_url="https://api.openai.com/v1"' \
+    -c "model_providers.cred_forward.auth.command=$client_toml" \
+    -c 'model_providers.cred_forward.auth.args=["openai"]' \
+    -c 'model_providers.cred_forward.wire_api="responses"' \
+    "$@"

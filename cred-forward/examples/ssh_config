@@ -1,0 +1,12 @@
+# Replace the Host and remote socket path for your remote account.
+Host my-dev-host
+    HostName dev.example.com
+    User my-user
+
+    ForwardAgent yes
+    ExitOnForwardFailure yes
+    StreamLocalBindMask 0177
+    StreamLocalBindUnlink yes
+    RemoteForward /home/my-user/.cache/cred.sock ${HOME}/.cache/cred-agent.sock
+
+# For a macOS remote, use /Users/my-user/.cache/cred.sock instead.

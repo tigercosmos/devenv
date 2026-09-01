@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+script_path=$0
+while [ -L "$script_path" ]; do
+    script_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P)
+    link_target=$(readlink "$script_path")
+    case $link_target in
+        /*) script_path=$link_target ;;
+        *) script_path=$script_dir/$link_target ;;
+    esac
+done
+wrapper_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P)
+unset script_path script_dir link_target
+# shellcheck source=wrappers/_common.sh
+. "$wrapper_dir/_common.sh"
+
+client=$(cred_forward_client)
+real=$(cred_forward_real gh "${CRED_FORWARD_REAL_GH:-}" "$wrapper_dir")
+credential=$("$client" github) || exit $?
+GH_TOKEN=$credential
+export GH_TOKEN
+unset credential
+exec "$real" "$@"

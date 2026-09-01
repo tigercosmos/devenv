@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+script_path=$0
+while [ -L "$script_path" ]; do
+    script_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P)
+    link_target=$(readlink "$script_path")
+    case $link_target in
+        /*) script_path=$link_target ;;
+        *) script_path=$script_dir/$link_target ;;
+    esac
+done
+wrapper_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P)
+unset script_path script_dir link_target
+# shellcheck source=wrappers/_common.sh
+. "$wrapper_dir/_common.sh"
+
+client=$(cred_forward_client)
+real=$(cred_forward_real claude "${CRED_FORWARD_REAL_CLAUDE:-}" "$wrapper_dir")
+unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN
+if credential=$("$client" anthropicoauth 2>/dev/null); then
+    CLAUDE_CODE_OAUTH_TOKEN=$credential
+    export CLAUDE_CODE_OAUTH_TOKEN
+else
+    "$client" anthropic >/dev/null || exit $?
+    helper_word=$(cred_forward_shell_word "$client") || exit $?
+    helper_json=$(cred_forward_json_string "$helper_word anthropic") || exit $?
+    settings="{\"apiKeyHelper\":$helper_json}"
+    exec "$real" --settings "$settings" "$@"
+fi
+unset credential
+exec "$real" "$@"

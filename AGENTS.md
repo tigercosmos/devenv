@@ -26,9 +26,11 @@ and the shell configuration into the user's home directory. See
 - **Every change is cross-platform.** The repo supports macOS, Linux, and
   Windows (native PowerShell). A change to a `.sh` file needs the matching
   change in the `.ps1` file, and the other way round.
+  `cred-forward/` is an explicit, standalone macOS/Linux-only exception.
 - **Source `lib/common.sh` (or `lib/common.ps1`); do not duplicate helpers.**
   Use `log`, `ok`, `warn`, `fail`, `die`, `have`, and `os` instead of raw
   `echo` and `command -v`.
+  The standalone `cred-forward/` installers are an explicit exception.
 - **Installers are idempotent.** A second run must not change anything and
   must not fail. Something already installed is left alone unless `FORCE=1`.
 - **Never write outside the user's home directory** (`~/.local/bin`,
