@@ -21,7 +21,13 @@ The agent supports API credentials and existing CLI login credentials:
 
 ### 1. Install and start the local agent
 
-Run the matching installer from this directory:
+From the repository root, `make install` and `make update` ask for the
+`server` or `client` role. Press Enter to install the server. Set
+`CRED_FORWARD_ROLE=server` to skip the prompt. The installer requires Go 1.23
+or newer.
+
+To install only this component, run the matching installer from this
+directory:
 
 ```sh
 ./install/install-macos.sh agent

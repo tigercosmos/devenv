@@ -22,6 +22,14 @@ powershell -ExecutionPolicy Bypass -File install.ps1     # Windows
 Then open a new terminal. Tools that are already installed are left alone;
 `make update` (or `FORCE=1 make install`) upgrades everything.
 
+On macOS and Linux, `make install` asks whether this machine is a
+credential-forwarding server or client. Press Enter to select `server`.
+`make update` asks the same question and updates the selected role.
+
+Set `CRED_FORWARD_ROLE=server` or `CRED_FORWARD_ROLE=client` for an unattended
+install. The credential-forwarding step requires Go 1.23 or newer. Windows
+does not install `cred-forward`.
+
 ## What `make install` does
 
 | Step | Target | Installs | Where |
@@ -30,7 +38,8 @@ Then open a new terminal. Tools that are already installed are left alone;
 | 2 | `make skills` | [codexmon](https://github.com/tigercosmos/codexmon), [code-cortex-mcp](https://github.com/tigercosmos/code-cortex-mcp), the skills in [skills/](skills/) | binaries in `~/.local/bin`, skills in `~/.claude/skills`, linked into `~/.codex/skills`, `~/.agents/skills`, `~/.cursor/skills` |
 | 3 | `make scripts` | the utility scripts in [scripts/](scripts/) | on `PATH` via step 4 |
 | 4 | `make shell` | a sourced block in the login profile | macOS `~/.zprofile`, Linux `~/.bashrc`, Windows `$PROFILE` |
-| 5 | `make doctor` | — | reports the result |
+| 5 | `make cred-forward` | the local credential server or remote client | `~/.local/bin`, with wrappers under `~/.local/share/cred-forward` for clients |
+| 6 | `make doctor` | — | reports the result |
 
 `make shell` sources [shell/devenv.sh](shell/devenv.sh), which adds
 `~/.local/bin` and `devenv/scripts` to `PATH` and defines the agent aliases,
@@ -69,7 +78,7 @@ installed by `make skills` next to these.
 | Script | Purpose |
 |--------|---------|
 | `devenv-doctor` | Check every tool, skill, alias, and `PATH` entry; exit 1 on a miss |
-| `devenv-update` | Upgrade every tool to its latest release (`devenv-update gh codex` for a subset) |
+| `devenv-update` | Upgrade every tool and `cred-forward` (`devenv-update gh codex` upgrades only that subset) |
 | `devenv-sync-skills` | Link every skill in `~/.claude/skills` into the other agents' skill directories |
 
 Each has a `.ps1` twin for Windows.
@@ -79,6 +88,7 @@ Each has a `.ps1` twin for Windows.
 ```
 Makefile            make install | deps | skills | scripts | shell | doctor | update
 install.ps1         Windows entry point
+cred-forward/       macOS/Linux credential server, remote client, and wrappers
 dependencies/       install.sh / install.ps1 — gh, codex, claude, cursor agent
 skills/             install.sh / install.ps1 — codexmon, code-cortex-mcp, skill sync
                     <name>/SKILL.md — the skills this repo maintains
@@ -92,5 +102,6 @@ lib/                helpers shared by the installers
 | Variable | Effect |
 |----------|--------|
 | `FORCE=1` | Reinstall or upgrade tools that are already present |
+| `CRED_FORWARD_ROLE` | Select `server` or `client` without a prompt |
 | `DEVENV_PROFILE` | Override the profile file `make shell` edits |
 | `DEVENV_HOME` | Location of this repository (set by the profile block) |
