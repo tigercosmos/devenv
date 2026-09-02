@@ -7,6 +7,14 @@ $env:DEVENV_HOME = $script:DevenvHome
 # Installers must call real tools, not credential wrappers.
 $credWrappers = Join-Path $HOME '.local\share\cred-forward\wrappers'
 $pathParts = @($env:Path -split ';' | Where-Object { $_ -and ($_ -ne $credWrappers) })
+foreach ($persistentPath in @(
+    [Environment]::GetEnvironmentVariable('Path', 'User'),
+    [Environment]::GetEnvironmentVariable('Path', 'Machine')
+)) {
+    foreach ($part in @($persistentPath -split ';' | Where-Object { $_ -and ($_ -ne $credWrappers) })) {
+        if ($pathParts -notcontains $part) { $pathParts += $part }
+    }
+}
 if (($pathParts | Select-Object -First 1) -ne $script:LocalBin) { $pathParts = @($script:LocalBin) + $pathParts }
 $env:Path = $pathParts -join ';'
 

@@ -13,8 +13,8 @@ function Install-Gh {
     Log 'gh (GitHub CLI)'
     if ((Have gh) -and -not $Force) { Ok "already installed: $((gh --version)[0])"; return }
     if (Have winget) {
-        winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements --silent
-        if ($LASTEXITCODE -ne 0 -and $Force) { winget upgrade --id GitHub.cli -e --silent }
+        if (Have gh) { winget upgrade --id GitHub.cli -e --silent }
+        else { winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements --silent }
     } else {
         # Fall back to the release zip in ~\.local\bin
         $tag = Get-LatestTag 'cli/cli'; $ver = $tag.TrimStart('v')
@@ -40,7 +40,15 @@ function Install-Codex {
         $dir = Join-Path $tmp $name
         Fetch "https://github.com/openai/codex/releases/latest/download/$name-$arch-pc-windows-msvc.exe.zip" "$dir.zip"
         Expand-Archive "$dir.zip" -DestinationPath $dir -Force
-        Install-Bin (Get-ChildItem $dir -Filter '*.exe' | Select-Object -First 1).FullName "$name.exe"
+        $binary = Join-Path $dir "$name-$arch-pc-windows-msvc.exe"
+        if (-not (Test-Path $binary)) { throw "$name executable not found in its release archive" }
+        Install-Bin $binary "$name.exe"
+        if ($name -eq 'codex') {
+            foreach ($helper in 'codex-command-runner.exe', 'codex-windows-sandbox-setup.exe') {
+                $helperPath = Join-Path $dir $helper
+                if (Test-Path $helperPath) { Install-Bin $helperPath $helper }
+            }
+        }
     }
     Remove-Item $tmp -Recurse -Force
     Refresh-Path

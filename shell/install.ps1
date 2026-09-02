@@ -6,6 +6,19 @@ param()
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\lib\common.ps1')
 
+# The documented bootstrap uses a process-scoped Bypass so this installer can
+# start on a default Windows client. The login profile still needs a persistent
+# policy that permits local scripts after that bootstrap process exits.
+$policies = Get-ExecutionPolicy -List
+$normalPolicy = @('MachinePolicy', 'UserPolicy', 'CurrentUser', 'LocalMachine') |
+    ForEach-Object { ($policies | Where-Object Scope -eq $_).ExecutionPolicy } |
+    Where-Object { $_ -ne 'Undefined' } |
+    Select-Object -First 1
+if (-not $normalPolicy) { $normalPolicy = 'Restricted' }
+if ($normalPolicy -in @('Restricted', 'AllSigned')) {
+    throw "PowerShell execution policy $normalPolicy will block the devenv profile. Run: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned"
+}
+
 # Keep the shared shell-profile contract explicit. Windows has no second one.
 $additionalLoginProfile = Get-AdditionalLoginProfile
 if ($additionalLoginProfile) { throw 'unexpected additional PowerShell profile' }
@@ -55,8 +68,15 @@ foreach ($pair in @(@('codex','--dangerously-bypass-approvals-and-sandbox'), @('
 }
 exit $rc
 '@
-& (Get-Process -Id $PID).Path -NoLogo -NoProfile -ExecutionPolicy Bypass -Command $check
-if ($LASTEXITCODE -ne 0) { throw 'wrapper check failed — see above' }
+$tmp = New-TempDir
+try {
+    $checkScript = Join-Path $tmp 'check-wrappers.ps1'
+    Set-Content -LiteralPath $checkScript -Value $check -Encoding UTF8
+    & (Get-Process -Id $PID).Path -NoLogo -NoProfile -ExecutionPolicy Bypass -File $checkScript
+    if ($LASTEXITCODE -ne 0) { throw 'wrapper check failed — see above' }
+} finally {
+    Remove-Item $tmp -Recurse -Force
+}
 
 Write-Host ''
 Write-Host "Open a new terminal, or run:  . `$PROFILE"

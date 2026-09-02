@@ -51,7 +51,7 @@ install_code_cortex() {
         ok "already installed: $(code-cortex-mcp --version 2>&1 | head -1)"
     elif have code-cortex-mcp; then
         # Self-update keeps the build the user has (release binary updates in place).
-        code-cortex-mcp update || fetch_stdout https://raw.githubusercontent.com/tigercosmos/code-cortex-mcp/main/install.sh | bash -s -- --dir "$LOCAL_BIN"
+        code-cortex-mcp update -y || fetch_stdout https://raw.githubusercontent.com/tigercosmos/code-cortex-mcp/main/install.sh | bash -s -- --dir "$LOCAL_BIN"
         ok "$(code-cortex-mcp --version 2>&1 | head -1)"
     else
         # The official installer puts the binary in ~/.local/bin and configures
