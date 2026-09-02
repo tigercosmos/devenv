@@ -8,9 +8,21 @@ CLAUDE_SKILLS="$HOME/.claude/skills"
 FORCE="${FORCE:-0}"          # FORCE=1 reinstalls / upgrades tools that are already present
 export DEVENV_HOME LOCAL_BIN CLAUDE_SKILLS FORCE
 
-# Tools installed by this repo land in ~/.local/bin; make them visible to the
-# installers even before the shell profile has been configured.
-case ":$PATH:" in *":$LOCAL_BIN:"*) ;; *) PATH="$LOCAL_BIN:$PATH" ;; esac
+# Installers must call real tools, not credential wrappers that require an SSH
+# connection. Remove the wrapper directory, then put ~/.local/bin first.
+CRED_FORWARD_WRAPPERS="$HOME/.local/share/cred-forward/wrappers"
+IFS=: read -r -a _devenv_path_parts <<<"$PATH"
+_devenv_clean_path=""
+for _devenv_path_part in "${_devenv_path_parts[@]}"; do
+    [ "$_devenv_path_part" = "$CRED_FORWARD_WRAPPERS" ] && continue
+    _devenv_clean_path="${_devenv_clean_path:+$_devenv_clean_path:}$_devenv_path_part"
+done
+case "$_devenv_clean_path:" in
+    "$LOCAL_BIN:"*) PATH="$_devenv_clean_path" ;;
+    :) PATH="$LOCAL_BIN" ;;
+    *) PATH="$LOCAL_BIN:$_devenv_clean_path" ;;
+esac
+unset CRED_FORWARD_WRAPPERS _devenv_clean_path _devenv_path_part _devenv_path_parts
 export PATH
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -133,6 +145,18 @@ eval_in_profile() {
         zsh -f -i -c "source '$file' >/dev/null 2>&1; $cmd" 2>/dev/null
     else
         bash --noprofile --norc -i -c "source '$file' >/dev/null 2>&1; $cmd" 2>/dev/null
+    fi
+}
+
+# profile_executable FILE NAME — resolve the external command in a clean shell,
+# bypassing aliases and functions that may use the same name.
+profile_executable() {
+    local file="$1" name="$2"
+    case "$name" in *[!A-Za-z0-9._-]*|'') return 2 ;; esac
+    if [ "$(profile_shell "$file")" = zsh ] && have zsh; then
+        eval_in_profile "$file" "whence -p -- '$name'"
+    else
+        eval_in_profile "$file" "type -P -- '$name'"
     fi
 }
 

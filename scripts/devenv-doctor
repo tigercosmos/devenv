@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # devenv-doctor — report the state of the devenv environment. Exit 1 if anything is missing.
 set -uo pipefail
+DEVENV_CALLER_PATH=$PATH
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 rc=0
@@ -22,6 +23,31 @@ if [ "$(command -v codex 2>/dev/null)" = "$LOCAL_BIN/codex" ]; then
 fi
 check_tool claude claude --version
 check_tool agent agent --version
+
+CRED_FORWARD_STATE_DIR="$HOME/.local/share/cred-forward"
+CRED_FORWARD_ROLE=$(sed -n '1p' "$CRED_FORWARD_STATE_DIR/role" 2>/dev/null || true)
+CRED_FORWARD_WRAPPERS="$CRED_FORWARD_STATE_DIR/wrappers"
+if [ "$CRED_FORWARD_ROLE" = server ]; then
+    if [ -x "$LOCAL_BIN/cred-agent" ]; then ok "cred-agent  ($LOCAL_BIN/cred-agent)"
+    else fail "cred-agent is missing (run: make cred-forward)"; rc=1; fi
+    if [ -S "$HOME/.cache/cred-agent.sock" ]; then ok "cred-agent socket is available"
+    else fail "cred-agent socket is unavailable (run: make cred-forward)"; rc=1; fi
+    case "$(os)" in
+        macos) cred_service="$HOME/Library/LaunchAgents/com.tigercosmos.cred-agent.plist" ;;
+        linux) cred_service="$HOME/.config/systemd/user/cred-agent.service" ;;
+    esac
+    if [ -f "$cred_service" ]; then ok "cred-agent user service -> $cred_service"
+    else fail "cred-agent user service is missing (run: make cred-forward)"; rc=1; fi
+    if [ -f "$HOME/.ssh/config.d/cred-forward.conf" ]; then ok "SSH forwarding fragment is installed"
+    else warn "no SSH hosts use credential forwarding (set CRED_FORWARD_HOSTS and run: make cred-forward)"; fi
+elif [ "$CRED_FORWARD_ROLE" = client ]; then
+    if [ -x "$LOCAL_BIN/cred-client" ]; then ok "cred-client  ($LOCAL_BIN/cred-client)"
+    else fail "cred-client is missing (run: make cred-forward)"; rc=1; fi
+    for tool in gh claude codex; do
+        if [ -x "$CRED_FORWARD_WRAPPERS/$tool" ]; then ok "credential wrapper $tool -> $CRED_FORWARD_WRAPPERS/$tool"
+        else fail "credential wrapper $tool is missing (run: make cred-forward)"; rc=1; fi
+    done
+fi
 
 log "skills and tools"
 if [ "$(os)" = windows ]; then
@@ -53,7 +79,11 @@ for agent_dir in "$HOME/.codex/skills" "$HOME/.agents/skills" "$HOME/.cursor/ski
 done
 if have claude; then
     if claude mcp get code-cortex-mcp >/dev/null 2>&1; then ok "claude mcp: code-cortex-mcp registered"
-    else fail "claude mcp: code-cortex-mcp not registered (run: code-cortex-mcp install)"; rc=1; fi
+    else fail "claude mcp: code-cortex-mcp not registered (run: make skills)"; rc=1; fi
+fi
+if have codex; then
+    if codex mcp get code-cortex-mcp >/dev/null 2>&1; then ok "codex mcp: code-cortex-mcp registered"
+    else fail "codex mcp: code-cortex-mcp not registered (run: make skills)"; rc=1; fi
 fi
 
 PROFILE=$(profile_file)
@@ -62,11 +92,26 @@ if grep -qF '# >>> devenv >>>' "$PROFILE" 2>/dev/null; then ok "devenv block pre
 else fail "devenv block missing (run: make shell)"; rc=1; fi
 check_aliases "$PROFILE" || rc=1
 for d in "$LOCAL_BIN" "$DEVENV_HOME/scripts"; do
-    case ":$PATH:" in
+    case ":$DEVENV_CALLER_PATH:" in
         *":$d:"*) ok "PATH contains $d" ;;
         *) warn "PATH of this shell lacks $d (open a new terminal after make install)" ;;
     esac
 done
+if [ "$CRED_FORWARD_ROLE" = client ]; then
+    for tool in gh claude codex; do
+        resolved=$(profile_executable "$PROFILE" "$tool") || resolved=""
+        if [ "$resolved" = "$CRED_FORWARD_WRAPPERS/$tool" ]; then
+            ok "$tool resolves to its credential wrapper in the profile"
+        else
+            fail "$tool does not resolve to its credential wrapper in $PROFILE"
+            rc=1
+        fi
+    done
+    case ":$DEVENV_CALLER_PATH:" in
+        *":$CRED_FORWARD_WRAPPERS:"*) ok "PATH contains $CRED_FORWARD_WRAPPERS" ;;
+        *) warn "PATH of this shell lacks $CRED_FORWARD_WRAPPERS (open a new terminal after make install)" ;;
+    esac
+fi
 
 echo
 [ $rc -eq 0 ] && ok "all checks passed" || fail "some checks failed"

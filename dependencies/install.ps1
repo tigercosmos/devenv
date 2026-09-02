@@ -32,21 +32,17 @@ function Install-Gh {
 function Install-Codex {
     Log 'codex (OpenAI Codex CLI)'
     if ((Have codex) -and -not $Force) { Ok "already installed: $(codex --version)"; return }
-    if (Have npm) {
-        npm install -g @openai/codex@latest
-    } else {
-        $arch = if ((Get-Arch) -eq 'arm64') { 'aarch64' } else { 'x86_64' }
-        $tmp = New-TempDir
-        # codex-code-mode-host is a separate release asset that codex expects
-        # next to itself (plugin management, "code mode").
-        foreach ($name in 'codex', 'codex-code-mode-host') {
-            $dir = Join-Path $tmp $name
-            Fetch "https://github.com/openai/codex/releases/latest/download/$name-$arch-pc-windows-msvc.exe.zip" "$dir.zip"
-            Expand-Archive "$dir.zip" -DestinationPath $dir -Force
-            Install-Bin (Get-ChildItem $dir -Filter '*.exe' | Select-Object -First 1).FullName "$name.exe"
-        }
-        Remove-Item $tmp -Recurse -Force
+    $arch = if ((Get-Arch) -eq 'arm64') { 'aarch64' } else { 'x86_64' }
+    $tmp = New-TempDir
+    # codex-code-mode-host is a separate release asset that codex expects
+    # next to itself (plugin management, "code mode").
+    foreach ($name in 'codex', 'codex-code-mode-host') {
+        $dir = Join-Path $tmp $name
+        Fetch "https://github.com/openai/codex/releases/latest/download/$name-$arch-pc-windows-msvc.exe.zip" "$dir.zip"
+        Expand-Archive "$dir.zip" -DestinationPath $dir -Force
+        Install-Bin (Get-ChildItem $dir -Filter '*.exe' | Select-Object -First 1).FullName "$name.exe"
     }
+    Remove-Item $tmp -Recurse -Force
     Refresh-Path
     Ok "$(codex --version)"
 }

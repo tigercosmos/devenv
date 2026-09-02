@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin"
+export PATH
+
+config_dir="$HOME/.config/cred-forward"
+if [ -f "$config_dir/agent.env" ]; then
+    config_file="$config_dir/agent.env"
+    case "$(uname -s)" in
+        Darwin) config_mode=$(stat -f '%Lp' "$config_file") ;;
+        Linux) config_mode=$(stat -c '%a' "$config_file") ;;
+        *) printf '%s\n' 'cred-agent: unsupported platform' >&2; exit 1 ;;
+    esac
+    if [ -L "$config_file" ] || [ ! -O "$config_file" ] \
+        || (( (8#$config_mode & 8#077) != 0 )); then
+        printf '%s\n' 'cred-agent: agent.env must be an owner-only regular file' >&2
+        exit 1
+    fi
+    # This owner-only file contains provider commands, not credential values.
+    # shellcheck disable=SC1090,SC1091
+    . "$config_file"
+fi
+CRED_AGENT_SOCKET="$HOME/.cache/cred-agent.sock"
+export CRED_AGENT_SOCKET
+exec "$HOME/.local/bin/cred-agent"

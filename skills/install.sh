@@ -61,9 +61,28 @@ install_code_cortex() {
         ok "$(code-cortex-mcp --version 2>&1 | head -1)"
     fi
 
-    # The agent configuration (MCP entries + skill) is done by the binary itself.
+    # The upstream configurator installs hooks and the shared skill. Run it
+    # only when that shared setup is missing; an unconditional run can start
+    # duplicate background indexers.
     if [ ! -f "$CLAUDE_SKILLS/code-cortex/SKILL.md" ]; then
-        code-cortex-mcp install || warn "code-cortex-mcp install failed; run it by hand to configure your agents"
+        code-cortex-mcp install \
+            || warn "code-cortex-mcp install failed; run it by hand to configure your agents"
+    else
+        ok "shared agent configuration present"
+    fi
+
+    # A fresh agent home can escape the upstream auto-detection. Register each
+    # installed CLI explicitly and idempotently instead of rerunning the full
+    # configurator.
+    if have claude && ! claude mcp get code-cortex-mcp >/dev/null 2>&1; then
+        claude mcp add --scope user code-cortex-mcp -- "$LOCAL_BIN/code-cortex-mcp" \
+            >/dev/null \
+            || warn "could not register code-cortex-mcp with Claude"
+    fi
+    if have codex && ! codex mcp get code-cortex-mcp >/dev/null 2>&1; then
+        codex mcp add code-cortex-mcp -- "$LOCAL_BIN/code-cortex-mcp" \
+            >/dev/null \
+            || warn "could not register code-cortex-mcp with Codex"
     fi
     if [ -f "$CLAUDE_SKILLS/code-cortex/SKILL.md" ]; then
         ok "skill present: $CLAUDE_SKILLS/code-cortex"
@@ -95,7 +114,8 @@ install_repo_skills() {
             if [ "$FORCE" != 1 ]; then
                 warn "$name: $dest exists and is not a link; FORCE=1 to replace (the old copy is kept in .devenv-backup)"; continue
             fi
-            local bak="$CLAUDE_SKILLS/.devenv-backup/$name-$(date +%Y%m%d%H%M%S)"
+            local bak
+            bak="$CLAUDE_SKILLS/.devenv-backup/$name-$(date +%Y%m%d%H%M%S)"
             mkdir -p "$(dirname "$bak")"; mv "$dest" "$bak"
             warn "$name: moved the previous copy to $bak"
         fi

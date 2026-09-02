@@ -71,6 +71,56 @@ func TestCommandDoesNotInheritCredentialEnvironment(t *testing.T) {
 	}
 }
 
+func TestExecutableDoesNotInvokeShell(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "credential helper")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf credential\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, err := (Executable{Name: path}).Credential(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "credential" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestTextFileRequiresOwnerOnlyPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "credential")
+	if err := os.WriteFile(path, []byte("credential\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (TextFile{Path: path}).Credential(context.Background())
+	if err == nil {
+		t.Fatal("world-readable credential file unexpectedly succeeded")
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := (TextFile{Path: path}).Credential(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "credential" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestJSONFileReadsNestedCredential(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(path, []byte(`{"tokens":{"access_token":"credential"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := (JSONFile{Path: path, Keys: []string{"tokens", "access_token"}}).Credential(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "credential" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestCommandTimeoutKillsDescendantsHoldingStdout(t *testing.T) {
 	command := Command{
 		EnvName: "COMMAND",
@@ -131,6 +181,8 @@ func TestDefaultRegistrySupportsLoginCredentialKinds(t *testing.T) {
 }
 
 func TestDefaultRegistryDoesNotInheritStandardVariablesByDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", "")
 	t.Setenv("CRED_AGENT_INHERIT_ENV", "")
 	t.Setenv("CRED_AGENT_GITHUB", "")
 	t.Setenv("CRED_AGENT_GITHUB_COMMAND", "")
@@ -142,6 +194,8 @@ func TestDefaultRegistryDoesNotInheritStandardVariablesByDefault(t *testing.T) {
 }
 
 func TestDefaultRegistryCanExplicitlyInheritStandardVariables(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", "")
 	t.Setenv("CRED_AGENT_INHERIT_ENV", "1")
 	t.Setenv("CRED_AGENT_GITHUB", "")
 	t.Setenv("CRED_AGENT_GITHUB_COMMAND", "")
@@ -152,5 +206,50 @@ func TestDefaultRegistryCanExplicitlyInheritStandardVariables(t *testing.T) {
 	}
 	if got != "ambient-credential" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDefaultRegistryUsesLocalLoginCredentials(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gh := filepath.Join(bin, "gh")
+	if err := os.WriteFile(gh, []byte("#!/bin/sh\nprintf github-login\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	codexDir := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codexDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	auth := `{"tokens":{"access_token":"chatgpt-login","account_id":"account-id"}}`
+	if err := os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte(auth), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secretDir := filepath.Join(home, ".local", "share", "cred-forward", "secrets")
+	if err := os.MkdirAll(secretDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretDir, "claude-oauth"), []byte("claude-login\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", bin)
+
+	tests := map[string]string{
+		"github":         "github-login",
+		"anthropicoauth": "claude-login",
+		"openaichatgpt":  "chatgpt-login",
+		"openaiaccount":  "account-id",
+	}
+	for service, want := range tests {
+		got, err := NewDefaultRegistry().Credential(context.Background(), service)
+		if err != nil {
+			t.Fatalf("%s: %v", service, err)
+		}
+		if got != want {
+			t.Fatalf("%s: got %q, want %q", service, got, want)
+		}
 	}
 }

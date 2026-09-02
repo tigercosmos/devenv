@@ -4,6 +4,12 @@ $script:LocalBin = Join-Path $HOME '.local\bin'
 $script:ClaudeSkills = Join-Path $HOME '.claude\skills'
 $env:DEVENV_HOME = $script:DevenvHome
 
+# Installers must call real tools, not credential wrappers.
+$credWrappers = Join-Path $HOME '.local\share\cred-forward\wrappers'
+$pathParts = @($env:Path -split ';' | Where-Object { $_ -and ($_ -ne $credWrappers) })
+if (($pathParts | Select-Object -First 1) -ne $script:LocalBin) { $pathParts = @($script:LocalBin) + $pathParts }
+$env:Path = $pathParts -join ';'
+
 function Log($msg)  { Write-Host "==> $msg" -ForegroundColor Blue }
 function Ok($msg)   { Write-Host "  + $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "  ! $msg" -ForegroundColor Yellow }

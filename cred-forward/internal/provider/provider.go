@@ -3,11 +3,13 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -86,7 +88,33 @@ func (c Command) Credential(ctx context.Context) (string, error) {
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, "/bin/sh", "-c", command)
+	return runCommand(cmdCtx, "/bin/sh", []string{"-c", command})
+}
+
+// Executable reads a credential from a fixed executable and argument list.
+// It does not invoke a shell.
+type Executable struct {
+	Name    string
+	Args    []string
+	Timeout time.Duration
+}
+
+// Credential implements Source.
+func (e Executable) Credential(ctx context.Context) (string, error) {
+	if _, err := exec.LookPath(e.Name); err != nil {
+		return "", ErrNotConfigured
+	}
+	timeout := e.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return runCommand(cmdCtx, e.Name, e.Args)
+}
+
+func runCommand(ctx context.Context, name string, args []string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = credentialCommandEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
@@ -110,12 +138,104 @@ func (c Command) Credential(ctx context.Context) (string, error) {
 	if tooLarge {
 		return "", protocol.ErrCredentialTooLarge
 	}
-	if cmdCtx.Err() != nil || readErr != nil || waitErr != nil {
+	if ctx.Err() != nil || readErr != nil || waitErr != nil {
 		return "", errors.New("credential command failed")
 	}
 	value := strings.TrimSuffix(string(output), "\n")
 	value = strings.TrimSuffix(value, "\r")
 	return value, nil
+}
+
+// TextFile reads a credential from an owner-only local file.
+type TextFile struct {
+	Path string
+}
+
+// Credential implements Source.
+func (f TextFile) Credential(context.Context) (string, error) {
+	path, err := expandHome(f.Path)
+	if err != nil {
+		return "", err
+	}
+	data, err := readPrivateFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", ErrNotConfigured
+	}
+	if err != nil {
+		return "", errors.New("credential file is unavailable")
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r"), nil
+}
+
+// JSONFile reads one nested string value from an owner-only JSON file.
+type JSONFile struct {
+	Path string
+	Keys []string
+}
+
+// Credential implements Source.
+func (f JSONFile) Credential(context.Context) (string, error) {
+	path, err := expandHome(f.Path)
+	if err != nil {
+		return "", err
+	}
+	data, err := readPrivateFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", ErrNotConfigured
+	}
+	if err != nil {
+		return "", errors.New("credential file is unavailable")
+	}
+	var value any
+	if json.Unmarshal(data, &value) != nil {
+		return "", errors.New("credential file is invalid")
+	}
+	for _, key := range f.Keys {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return "", ErrNotConfigured
+		}
+		value, ok = object[key]
+		if !ok {
+			return "", ErrNotConfigured
+		}
+	}
+	credential, ok := value.(string)
+	if !ok || credential == "" {
+		return "", ErrNotConfigured
+	}
+	return credential, nil
+}
+
+func expandHome(path string) (string, error) {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.New("find home directory")
+	}
+	if path == "~" {
+		return home, nil
+	}
+	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
+}
+
+func readPrivateFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != uint32(os.Geteuid()) || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		return nil, errors.New("credential file must be owner-only")
+	}
+	return io.ReadAll(file)
 }
 
 func killProcessGroup(cmd *exec.Cmd) error {
@@ -197,6 +317,10 @@ func NewDefaultRegistry() Registry {
 		registry["anthropicoauth"] = append(registry["anthropicoauth"].(Chain), Env{Name: "CLAUDE_CODE_OAUTH_TOKEN"})
 		registry["openai"] = append(registry["openai"].(Chain), Env{Name: "OPENAI_API_KEY"})
 	}
+	registry["github"] = append(registry["github"].(Chain), Executable{Name: "gh", Args: []string{"auth", "token"}})
+	registry["anthropicoauth"] = append(registry["anthropicoauth"].(Chain), TextFile{Path: "~/.local/share/cred-forward/secrets/claude-oauth"})
+	registry["openaichatgpt"] = append(registry["openaichatgpt"].(Chain), JSONFile{Path: "~/.codex/auth.json", Keys: []string{"tokens", "access_token"}})
+	registry["openaiaccount"] = append(registry["openaiaccount"].(Chain), JSONFile{Path: "~/.codex/auth.json", Keys: []string{"tokens", "account_id"}})
 	return registry
 }
 

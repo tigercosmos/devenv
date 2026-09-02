@@ -41,8 +41,44 @@ if ((Have code-cortex-mcp) -and -not $Force) {
     Refresh-Path
     Ok "$(code-cortex-mcp --version 2>&1)"
 }
+# The upstream configurator installs hooks and the shared skill. Run it only
+# when that shared setup is missing; an unconditional run can start duplicate
+# background indexers.
 if (-not (Test-Path (Join-Path $script:ClaudeSkills 'code-cortex\SKILL.md'))) {
-    code-cortex-mcp install
+    try {
+        code-cortex-mcp install
+        if ($LASTEXITCODE -ne 0) {
+            Warn 'code-cortex-mcp install failed; run it by hand to configure your agents'
+        }
+    } catch {
+        Warn 'code-cortex-mcp install failed; run it by hand to configure your agents'
+    }
+} else {
+    Ok 'shared agent configuration present'
+}
+
+# A fresh agent home can escape the upstream auto-detection. Register each
+# installed CLI explicitly and idempotently instead of rerunning the complete
+# configurator.
+foreach ($agent in @('claude', 'codex')) {
+    if (-not (Have $agent)) { continue }
+    $registered = $false
+    try {
+        & $agent mcp get code-cortex-mcp *> $null
+        $registered = ($LASTEXITCODE -eq 0)
+    } catch {}
+    if (-not $registered) {
+        try {
+            if ($agent -eq 'claude') {
+                & $agent mcp add --scope user code-cortex-mcp -- (Join-Path $script:LocalBin 'code-cortex-mcp') *> $null
+            } else {
+                & $agent mcp add code-cortex-mcp -- (Join-Path $script:LocalBin 'code-cortex-mcp') *> $null
+            }
+            if ($LASTEXITCODE -ne 0) { Warn "could not register code-cortex-mcp with $agent" }
+        } catch {
+            Warn "could not register code-cortex-mcp with $agent"
+        }
+    }
 }
 if (Test-Path (Join-Path $script:ClaudeSkills 'code-cortex\SKILL.md')) {
     Ok "skill present: $(Join-Path $script:ClaudeSkills 'code-cortex')"

@@ -42,6 +42,17 @@ foreach ($dir in @((Join-Path $HOME '.codex\skills'), (Join-Path $HOME '.agents\
     if ($missing) { Warn "$dir is missing: $($missing -join ', ')  (run devenv-sync-skills.ps1)" }
     if ($stale) { Warn "$dir has a local copy, not a link, of: $($stale -join ', ')  (devenv-sync-skills.ps1 -Force)" }
 }
+foreach ($agent in @('claude', 'codex')) {
+    if (-not (Have $agent)) { continue }
+    try {
+        & $agent mcp get code-cortex-mcp *> $null
+        if ($LASTEXITCODE -eq 0) { Ok "$agent mcp: code-cortex-mcp registered" }
+        else { Fail "$agent mcp: code-cortex-mcp not registered (run: make skills)"; $rc = 1 }
+    } catch {
+        Fail "$agent mcp: code-cortex-mcp not registered (run: make skills)"
+        $rc = 1
+    }
+}
 
 Log "shell ($PROFILE)"
 if ((Test-Path $PROFILE) -and (Get-Content $PROFILE -Raw).Contains('# >>> devenv >>>')) { Ok 'devenv block present' }

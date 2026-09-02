@@ -21,29 +21,36 @@ powershell -ExecutionPolicy Bypass -File install.ps1     # Windows
 
 Then open a new terminal. Tools that are already installed are left alone;
 `make update` (or `FORCE=1 make install`) upgrades everything.
+Codex is installed from its official native release and does not require npm.
+The copy in `~/.local/bin` takes precedence over npm or Homebrew copies.
 
-On macOS and Linux, `make install` asks whether this machine is a
+On the first macOS or Linux run, `make install` asks whether this machine is a
 credential-forwarding server or client. Press Enter to select `server`.
-`make update` asks the same question and updates the selected role.
+The server setup starts a user service and asks which SSH hosts to configure.
+The client setup activates the transparent wrappers. Later installs and
+`make update` reuse the saved role and SSH hosts.
 
 Set `CRED_FORWARD_ROLE=server` or `CRED_FORWARD_ROLE=client` for an unattended
-install. The credential-forwarding step requires Go 1.23 or newer. Windows
-does not install `cred-forward`.
+install. Set `CRED_FORWARD_HOSTS="sim0 sim4"` to configure server hosts without
+a prompt, and set `CRED_FORWARD_CLAUDE_SETUP=skip` to skip the interactive
+Claude setup-token prompt. The credential-forwarding step requires Go 1.23 or
+newer. Windows does not install `cred-forward`.
 
 ## What `make install` does
 
 | Step | Target | Installs | Where |
 |------|--------|----------|-------|
-| 1 | `make deps` | `gh`, `codex` (with its `codex-code-mode-host` helper when installed from a release), `claude`, cursor `agent` | `~/.local/bin` (gh via Homebrew on macOS, winget on Windows) |
+| 1 | `make deps` | `gh`, native-release `codex` and its `codex-code-mode-host` helper, `claude`, cursor `agent` | `~/.local/bin` (gh via Homebrew on macOS, winget on Windows) |
 | 2 | `make skills` | [codexmon](https://github.com/tigercosmos/codexmon), [code-cortex-mcp](https://github.com/tigercosmos/code-cortex-mcp), the skills in [skills/](skills/) | binaries in `~/.local/bin`, skills in `~/.claude/skills`, linked into `~/.codex/skills`, `~/.agents/skills`, `~/.cursor/skills` |
 | 3 | `make scripts` | the utility scripts in [scripts/](scripts/) | on `PATH` via step 4 |
 | 4 | `make shell` | a sourced block in the login profile | macOS `~/.zprofile`, Linux `~/.bashrc`, Windows `$PROFILE` |
-| 5 | `make cred-forward` | the local credential server or remote client | `~/.local/bin`, with wrappers under `~/.local/share/cred-forward` for clients |
+| 5 | `make cred-forward` | a local credential service and SSH forwarding, or the remote client and wrappers | user service files, `~/.ssh/config.d`, and `~/.local` |
 | 6 | `make doctor` | — | reports the result |
 
 `make shell` sources [shell/devenv.sh](shell/devenv.sh), which adds
-`~/.local/bin` and `devenv/scripts` to `PATH` and defines the agent aliases,
-then verifies that all three resolve:
+`~/.local/bin` and `devenv/scripts` to `PATH`. A client also puts the
+credential wrappers first. The script defines the agent aliases, then verifies
+that all three resolve:
 
 ```sh
 alias codex="codex --dangerously-bypass-approvals-and-sandbox"
@@ -103,5 +110,9 @@ lib/                helpers shared by the installers
 |----------|--------|
 | `FORCE=1` | Reinstall or upgrade tools that are already present |
 | `CRED_FORWARD_ROLE` | Select `server` or `client` without a prompt |
+| `CRED_FORWARD_HOSTS` | Space-separated SSH host aliases for server setup |
+| `CRED_FORWARD_CLAUDE_SETUP=skip` | Skip the server's Claude setup-token prompt |
+| `CRED_FORWARD_CLAUDE_SETUP=force` | Prompt again after Claude setup was declined |
+| `CRED_FORWARD_SSH_AGENT=1` | Also enable SSH-agent forwarding for managed hosts |
 | `DEVENV_PROFILE` | Override the profile file `make shell` edits |
 | `DEVENV_HOME` | Location of this repository (set by the profile block) |

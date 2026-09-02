@@ -4,9 +4,8 @@ Host my-dev-host
     User my-user
 
     ForwardAgent yes
-    ExitOnForwardFailure yes
-    StreamLocalBindMask 0177
-    StreamLocalBindUnlink yes
     RemoteForward /home/my-user/.cache/cred.sock ${HOME}/.cache/cred-agent.sock
 
 # For a macOS remote, use /Users/my-user/.cache/cred.sock instead.
+# Set StreamLocalBindMask 0177 and StreamLocalBindUnlink yes in the remote
+# sshd_config when possible. These settings secure and replace stale sockets.

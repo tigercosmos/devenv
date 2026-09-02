@@ -4,8 +4,8 @@
 macOS or Linux machine. The remote machine receives a Unix-domain socket, not a
 credential file.
 
-This directory is a standalone macOS and Linux component. The top-level
-`devenv` installer does not install it, and Windows is not supported.
+The top-level `devenv` installer installs and configures this component on
+macOS and Linux. Windows is not supported.
 
 The agent supports API credentials and existing CLI login credentials:
 
@@ -19,154 +19,70 @@ The agent supports API credentials and existing CLI login credentials:
 
 ## Set up credential forwarding
 
-### 1. Install and start the local agent
+### 1. Set up the local server
 
-From the repository root, `make install` and `make update` ask for the
-`server` or `client` role. Press Enter to install the server. Set
-`CRED_FORWARD_ROLE=server` to skip the prompt. The installer requires Go 1.23
-or newer.
-
-To install only this component, run the matching installer from this
-directory:
+Run the top-level installer on the machine that stores the logins:
 
 ```sh
-./install/install-macos.sh agent
-# or: ./install/install-linux.sh agent
+make install
 ```
 
-Set credentials in the agent process only, then start the agent:
+On the first run, press Enter to select `server`. Enter the SSH host aliases that need
+credential forwarding. The installer completes these tasks:
+
+- Installs `cred-agent` and starts a user service.
+- Uses the active `gh` login through `gh auth token`.
+- Uses the local Codex ChatGPT cache in `~/.codex/auth.json`.
+- Offers to store a Claude setup token in an owner-only local file.
+- Adds a managed OpenSSH fragment under `~/.ssh/config.d`.
+- Creates a missing remote `~/.cache` directory with mode `0700`. It preserves
+  the permissions of an existing directory.
+
+The macOS service is a LaunchAgent. The Linux service is a systemd user unit.
+The default local socket is `~/.cache/cred-agent.sock`.
+
+Use environment variables for an unattended server setup:
 
 ```sh
-CRED_AGENT_GITHUB='github-token' \
-CRED_AGENT_ANTHROPIC='anthropic-key' \
-CRED_AGENT_OPENAI='openai-key' \
-cred-agent
+CRED_FORWARD_ROLE=server \
+  CRED_FORWARD_HOSTS="sim0 sim4" \
+  CRED_FORWARD_CLAUDE_SETUP=skip \
+  make install
 ```
 
-The default socket is `~/.cache/cred-agent.sock`. Set `CRED_AGENT_SOCKET` or
-use `cred-agent -socket PATH` to change it.
+The installer saves the role and hosts. Later installs and `make update` reuse
+both values.
 
-Command helpers keep credential values out of the agent launch environment.
-Each command must print one credential and an optional final newline:
+If you decline the Claude setup prompt, later installs remember that choice.
+Set `CRED_FORWARD_CLAUDE_SETUP=force` to prompt again. The setup token appears
+in terminal output while `claude setup-token` runs. Clear terminal scrollback
+after you store it.
+
+Codex must use file-based credential storage for the built-in ChatGPT source.
+If `~/.codex/auth.json` is unavailable, define a command provider in
+`~/.config/cred-forward/agent.env`.
+
+### 2. Set up each remote client
+
+Clone this repository on the remote machine. Run:
 
 ```sh
-export CRED_AGENT_GITHUB_COMMAND='my-secret-tool read github'
-export CRED_AGENT_ANTHROPIC_COMMAND='my-secret-tool read anthropic'
-export CRED_AGENT_OPENAI_COMMAND='my-secret-tool read openai'
-cred-agent
+make install
 ```
 
-Use the active GitHub CLI login without copying its token:
+Select `client`. For an unattended install, run:
 
 ```sh
-export CRED_AGENT_GITHUB_COMMAND='gh auth token'
+CRED_FORWARD_ROLE=client make install
 ```
 
-The agent ignores standard variables such as `GH_TOKEN` by default. Set
-`CRED_AGENT_INHERIT_ENV=1` to use standard GitHub, Anthropic, Claude, and
-OpenAI variables as fallback sources. This option exposes all matching
-variables through the forwarded socket.
+The installer puts `cred-client` in `~/.local/bin`. It puts the wrappers in
+`~/.local/share/cred-forward/wrappers` and activates them in the shell profile.
+Open a new SSH connection after both installations finish.
 
-Claude subscription forwarding needs a long-lived OAuth token. Run
-`claude setup-token`, then store its output in a local secret provider. Set
-`CRED_AGENT_ANTHROPIC_OAUTH` or its command helper to return that token:
+### 3. Verify the connection
 
-```sh
-export CRED_AGENT_ANTHROPIC_OAUTH_COMMAND='my-secret-tool read claude-oauth'
-```
-
-Codex ChatGPT forwarding reads the current access token and account identifier
-from the local Codex credential store. These example commands use `jq`:
-
-```sh
-export CRED_AGENT_OPENAI_CHATGPT_COMMAND='jq -er .tokens.access_token "$HOME/.codex/auth.json"'
-export CRED_AGENT_OPENAI_ACCOUNT_COMMAND='jq -er .tokens.account_id "$HOME/.codex/auth.json"'
-```
-
-The Codex access token expires. The local Codex CLI refreshes its credential
-store during normal use. Restart local Codex if the remote wrapper gets a 401
-response and the local token is stale.
-
-The provider package uses small `Source` implementations and a registry.
-Keychain, 1Password, or Secret Service providers can implement the same
-interface later.
-
-### 2. Configure the OpenSSH connection
-
-Create `~/.cache` on the remote machine with mode `0700`:
-
-```sh
-install -d -m 0700 ~/.cache
-```
-
-Copy the relevant lines from [examples/ssh_config](examples/ssh_config) to the
-local `~/.ssh/config`. Replace the host and remote user:
-
-```sshconfig
-Host my-dev-host
-    HostName dev.example.com
-    User my-user
-    ForwardAgent yes
-    ExitOnForwardFailure yes
-    StreamLocalBindMask 0177
-    StreamLocalBindUnlink yes
-    RemoteForward /home/my-user/.cache/cred.sock ${HOME}/.cache/cred-agent.sock
-```
-
-Use an absolute path for the remote socket. OpenSSH expands `${HOME}` on the
-local side, so do not use it for the remote path.
-
-`StreamLocalBindMask 0177` creates an owner-only socket on systems that honor
-Unix socket modes. `StreamLocalBindUnlink yes` removes a stale socket before a
-new connection. `ExitOnForwardFailure yes` stops the connection if OpenSSH
-cannot create the forward. See the OpenSSH
-[`RemoteForward`](https://man.openbsd.org/ssh_config#RemoteForward) and
-[`StreamLocalBindMask`](https://man.openbsd.org/ssh_config#StreamLocalBindMask)
-documentation.
-
-The credential forward does not use SSH agent forwarding. `ForwardAgent yes`
-is included for development workflows that also need the local SSH agent.
-
-OpenSSH, VS Code Remote SSH, and clients that use this OpenSSH host entry use
-the same forward. No custom SSH command is required.
-
-### 3. Install the remote client and wrappers
-
-Clone or copy this directory to the remote machine. Run:
-
-```sh
-./install/install-linux.sh client
-# or: ./install/install-macos.sh client
-```
-
-The installer puts `cred-client` in `~/.local/bin`. It puts wrappers in
-`~/.local/share/cred-forward/wrappers`. Add the wrapper directory before the
-directory that contains the real tools:
-
-```sh
-export PATH="$HOME/.local/share/cred-forward/wrappers:$PATH"
-```
-
-The installer upgrades files that it installed before. It does not replace an
-unknown file at the same path. Set `FORCE=1` to replace that file and save the
-original under `~/.local/share/cred-forward/.devenv-backup`.
-
-Add that line to the remote shell startup file used by OpenSSH and VS Code.
-The installer does not edit a shell or SSH configuration file.
-
-Test each service after an SSH connection starts:
-
-```sh
-cred-client github
-cred-client anthropic
-cred-client openai
-```
-
-Each command writes only the requested credential to standard output. Errors
-go to standard error. `CRED_FORWARD_SOCKET` changes the default remote socket
-from `~/.cache/cred.sock`.
-
-Then use the normal commands:
+Use the normal commands after SSH connects:
 
 ```sh
 gh auth status
@@ -174,8 +90,86 @@ claude
 codex
 ```
 
-Set `CRED_FORWARD_REAL_GH`, `CRED_FORWARD_REAL_CLAUDE`, or
-`CRED_FORWARD_REAL_CODEX` if automatic real-binary discovery is unsuitable.
+The remote Codex credential store stays empty. Therefore,
+`codex login status` can report `Not logged in` while the wrapped Codex command
+uses the forwarded login.
+
+## Custom credential providers
+
+Command helpers keep credential values out of the agent launch environment.
+Each command must print one credential and an optional final newline:
+
+```sh
+CRED_AGENT_GITHUB_COMMAND='my-secret-tool read github'
+CRED_AGENT_ANTHROPIC_COMMAND='my-secret-tool read anthropic'
+CRED_AGENT_OPENAI_COMMAND='my-secret-tool read openai'
+```
+
+Put these assignments in `~/.config/cred-forward/agent.env`. Restart the user
+service after an edit.
+
+The agent ignores standard variables such as `GH_TOKEN` by default. Set
+`CRED_AGENT_INHERIT_ENV=1` to use standard GitHub, Anthropic, Claude, and
+OpenAI variables as fallback sources. This option exposes all matching
+variables through the forwarded socket.
+
+Claude subscription forwarding needs a setup token. You can instead use a
+local secret provider command:
+
+```sh
+CRED_AGENT_ANTHROPIC_OAUTH_COMMAND='my-secret-tool read claude-oauth'
+```
+
+You can also override the built-in Codex ChatGPT source:
+
+```sh
+CRED_AGENT_OPENAI_CHATGPT_COMMAND='my-secret-tool read codex-access-token'
+CRED_AGENT_OPENAI_ACCOUNT_COMMAND='my-secret-tool read codex-account-id'
+```
+
+The Codex access token expires. The local Codex CLI refreshes its credential
+store during normal use. Restart local Codex if the remote wrapper gets a 401
+response and the local token is stale.
+
+The provider package uses small `Source` implementations and a registry.
+Keychain, 1Password, and Secret Service providers can implement the same
+interface. The generated OpenSSH fragment has this form:
+
+```sshconfig
+Host my-dev-host
+    RemoteForward /home/my-user/.cache/cred.sock /Users/local-user/.cache/cred-agent.sock
+```
+
+Use an absolute path for the remote socket. OpenSSH expands `${HOME}` on the
+local side, so do not use it for the remote path.
+
+The remote SSH server controls the mode and stale-file behavior for a remote
+Unix socket. The `0700` parent directory restricts access to the remote account.
+Configure `StreamLocalBindMask 0177` and `StreamLocalBindUnlink yes` in the
+remote `sshd_config` when possible. These server settings provide reliable
+permissions and stale-socket cleanup. Client-side options cannot enable them.
+
+The generated client fragment does not set `ExitOnForwardFailure`. Therefore,
+a stale remote socket cannot lock you out of SSH, Orca, or VS Code. During
+initial host configuration, the server performs a best-effort cleanup when
+remote `ss` or `lsof` confirms that no process listens on the socket. If every
+SSH session is closed but `~/.cache/cred.sock` remains, remove that stale file
+on the remote and reconnect. Until then, the wrappers report that the forwarded
+socket is unavailable. See the OpenSSH
+[`RemoteForward`](https://man.openbsd.org/ssh_config#RemoteForward) and remote
+[`StreamLocalBindMask`](https://man.openbsd.org/sshd_config#StreamLocalBindMask)
+documentation.
+
+The credential forward does not need SSH-agent forwarding. Set
+`CRED_FORWARD_SSH_AGENT=1` during server installation only when the remote
+workflow must also use the local SSH agent. The installer then adds
+`ForwardAgent yes` to its managed fragment.
+
+OpenSSH, VS Code Remote SSH, and clients that use this OpenSSH host entry use
+the same forward. No custom SSH command is required.
+
+The installer backs up an existing SSH config before it adds the managed
+`Include` line. OpenSSH, Orca, and VS Code Remote SSH use the same host entry.
 
 ## Wrapper behavior
 
@@ -202,7 +196,8 @@ the existing Codex subscription login.
 
 - The agent and client never log credential values.
 - The local agent sets its socket mode to `0600`.
-- The setup uses `0700` socket directories and a `0177` OpenSSH socket mask.
+- The setup uses `0700` socket directories. Remote administrators can also
+  enforce a `0177` OpenSSH socket mask.
 - The protocol accepts six fixed service names and limits all frame sizes.
 - The remote wrappers do not write credential files. Codex and Claude API-key
   helpers fetch credentials only when the tool needs them.
@@ -226,7 +221,7 @@ design cannot undo a credential that remote root copied while forwarding was
 active. Revoke credentials if the remote root account is not trusted.
 
 `ForwardAgent yes` separately exposes the local SSH agent during the connection.
-Remove that line if the remote workflow does not need SSH agent forwarding.
+Leave `CRED_FORWARD_SSH_AGENT` unset unless the remote workflow needs it.
 
 ## Build and test
 

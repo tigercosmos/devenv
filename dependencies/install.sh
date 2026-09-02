@@ -73,13 +73,7 @@ install_codex() {
         fi
         return
     fi
-    if have npm; then
-        npm install -g @openai/codex@latest
-    elif [ "$OS" = macos ] && have brew; then
-        if brew list codex >/dev/null 2>&1; then brew upgrade codex || true; else brew install codex; fi
-    else
-        codex_from_release
-    fi
+    codex_from_release
     ok "$(codex --version 2>/dev/null | head -1)"
 }
 

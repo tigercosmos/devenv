@@ -6,6 +6,8 @@ RUN apt-get update \
     && useradd --create-home --shell /bin/bash remote \
     && echo 'remote:docker-test-only' | chpasswd
 
-WORKDIR /src
-COPY . .
+COPY cred-forward /src/cred-forward
+COPY lib /src/lib
+COPY shell /src/shell
+WORKDIR /src/cred-forward
 CMD ["bash", "test/docker-test.sh"]

@@ -106,6 +106,7 @@ ensure_dir "$bin_dir" 0755
 if [ "$role" = agent ] || [ "$role" = all ]; then
     (cd "$root" && CGO_ENABLED=0 go build -trimpath -o "$build_dir/cred-agent" ./cmd/cred-agent)
     install_artifact "$build_dir/cred-agent" "$bin_dir/cred-agent" 0755 bin-cred-agent
+    install_artifact "$root/service/cred-agent-launch" "$bin_dir/cred-agent-launch" 0755 bin-cred-agent-launch
 fi
 
 if [ "$role" = client ] || [ "$role" = all ]; then

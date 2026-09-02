@@ -16,7 +16,7 @@ build: clean
 	done
 
 docker-test:
-	docker build --progress=plain -f test/Dockerfile -t cred-forward-test .
+	docker build --progress=plain -f test/Dockerfile -t cred-forward-test ..
 	docker run --rm cred-forward-test
 
 clean:
