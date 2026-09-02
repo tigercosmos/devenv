@@ -6,9 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -27,6 +30,12 @@ var (
 type Server struct {
 	Providers provider.Registry
 	Timeout   time.Duration
+	AuditLog  *log.Logger
+}
+
+// NewAuditLogger creates the logger used for credential request records.
+func NewAuditLogger(writer io.Writer) *log.Logger {
+	return log.New(writer, "cred-agent: request ", 0)
 }
 
 // Serve accepts connections until the listener closes or the context ends.
@@ -85,29 +94,52 @@ func retryableAcceptError(err error) bool {
 
 func (s Server) handle(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+	peer := "unknown"
+	if pid, err := peerPID(conn); err == nil {
+		peer = strconv.Itoa(pid)
+	}
+	service := "-"
+	status := "invalid-request"
+	defer func() { s.logRequest(service, status, peer) }()
 	timeout := s.Timeout
 	if timeout == 0 {
 		timeout = 15 * time.Second
 	}
 	_ = conn.SetDeadline(time.Now().Add(timeout))
 	reader := bufio.NewReaderSize(conn, protocol.MaxHeaderSize)
-	service, err := protocol.ReadRequest(reader)
+	requestedService, err := protocol.ReadRequest(reader)
 	if err != nil {
 		_ = protocol.WriteError(conn, "invalid-request")
 		return
 	}
+	service = requestedService
 	if !protocol.ValidService(service) {
+		status = "unknown-service"
 		_ = protocol.WriteError(conn, "unknown-service")
 		return
 	}
 	credential, err := s.Providers.Credential(ctx, service)
 	if err != nil {
+		status = "unavailable"
 		_ = protocol.WriteError(conn, "unavailable")
 		return
 	}
 	if err := protocol.WriteCredential(conn, credential); err != nil {
+		status = "internal"
 		_ = protocol.WriteError(conn, "internal")
+		return
 	}
+	status = "ok"
+}
+
+func (s Server) logRequest(service, status, peer string) {
+	if s.AuditLog == nil {
+		return
+	}
+	s.AuditLog.Printf(
+		"timestamp=%s service=%s status=%s peer_pid=%s",
+		time.Now().UTC().Format(time.RFC3339), service, status, peer,
+	)
 }
 
 // Listen creates a Unix socket with mode 0600 and returns a race-safe cleanup function.

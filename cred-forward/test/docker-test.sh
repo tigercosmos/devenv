@@ -305,6 +305,10 @@ HOME=$mac_home DEVENV_HOME=/src FORCE=0 CRED_FORWARD_SKIP_SERVICE=1 bash -c '
 ' >"$test_root/mac-service.log"
 grep -Fq '<string>com.tigercosmos.cred-agent</string>' \
     "$mac_home/Library/LaunchAgents/com.tigercosmos.cred-agent.plist"
+grep -Fq '<key>CRED_AGENT_AUDIT_LOG</key>' \
+    "$mac_home/Library/LaunchAgents/com.tigercosmos.cred-agent.plist"
+grep -Fq '<key>StandardOutPath</key><string>/dev/null</string>' \
+    "$mac_home/Library/LaunchAgents/com.tigercosmos.cred-agent.plist"
 [ "$(stat -c '%a' "$mac_home/Library/LaunchAgents/com.tigercosmos.cred-agent.plist")" = 600 ]
 mkdir -p "$mac_home/.local/bin"
 cat >"$mac_home/.local/bin/launchctl" <<'EOF'

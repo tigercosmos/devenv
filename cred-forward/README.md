@@ -210,6 +210,15 @@ the existing Codex subscription login.
 ## Security model and limitations
 
 - The agent and client never log credential values.
+- Each connection logs its timestamp, service name, status, and local peer
+  process ID. An invalid request uses `service=-`.
+- For a forwarded request, the peer process ID identifies the local SSH
+  process. It does not identify the remote process that made the request.
+- The macOS agent writes audit records to
+  `~/Library/Logs/cred-agent.log`. The agent rotates the file at 1 MiB and
+  keeps one previous file at `~/Library/Logs/cred-agent.log.1`.
+- The Linux user service writes audit records to the systemd journal. Use
+  `journalctl --user -u cred-agent` to read the records.
 - The local agent sets its socket mode to `0600`.
 - The setup uses `0700` socket directories. Remote administrators can also
   enforce a `0177` OpenSSH socket mask.

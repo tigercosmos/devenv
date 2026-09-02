@@ -24,14 +24,21 @@ func main() {
 	if flag.NArg() != 0 {
 		fatal(errors.New("usage: cred-agent [-socket PATH]"))
 	}
+	auditOutput, err := newAuditOutput(os.Getenv("CRED_AGENT_AUDIT_LOG"))
+	if err != nil {
+		fatal(err)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	listener, cleanup, err := agent.Listen(*path)
 	if err != nil {
 		fatal(err)
 	}
-	fmt.Fprintf(os.Stderr, "cred-agent: listening on %s\n", *path)
-	server := agent.Server{Providers: provider.NewDefaultRegistry()}
+	fmt.Fprintf(auditOutput, "cred-agent: listening on %s\n", *path)
+	server := agent.Server{
+		Providers: provider.NewDefaultRegistry(),
+		AuditLog:  agent.NewAuditLogger(auditOutput),
+	}
 	serveErr := server.Serve(ctx, listener)
 	cleanupErr := cleanup()
 	if serveErr != nil {

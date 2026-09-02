@@ -187,7 +187,11 @@ configure_macos_service() {
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ProcessType</key><string>Background</string>
-  <key>StandardOutPath</key><string>$HOME/Library/Logs/cred-agent.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CRED_AGENT_AUDIT_LOG</key><string>$HOME/Library/Logs/cred-agent.log</string>
+  </dict>
+  <key>StandardOutPath</key><string>/dev/null</string>
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/cred-agent.err</string>
 </dict>
 </plist>"
