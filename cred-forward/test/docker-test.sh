@@ -230,19 +230,38 @@ HOME=$cleanup_local_home PATH="$cleanup_bin:/usr/local/go/bin:/usr/bin:/bin" \
 client_home=$test_root/client-home
 mkdir -p "$client_home"
 cat >"$client_home/.bashrc" <<'EOF'
-export DEVENV_HOME=/src
-. /src/shell/devenv.sh
 # Common toolchains prepend their own directory after the devenv block.
 export PATH="/opt/late-toolchain:$PATH"
 EOF
+cat >"$client_home/.profile" <<'EOF'
+[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+# A stock Ubuntu profile prepends this directory after it sources .bashrc.
+export PATH="$HOME/.local/bin:$PATH"
+EOF
 client_path="/usr/local/go/bin:/usr/bin:/bin"
-HOME=$client_home PATH=$client_path DEVENV_HOME=/src DEVENV_PROFILE="$client_home/.bashrc" \
-    CRED_FORWARD_ROLE=client /src/cred-forward/install.sh >"$test_root/client-install.log"
-HOME=$client_home PATH=$client_path DEVENV_HOME=/src DEVENV_PROFILE="$client_home/.bashrc" \
-    /src/cred-forward/install.sh >"$test_root/client-reinstall.log"
+HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
+    /src/shell/install.sh >"$test_root/client-shell-install.log"
+HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
+    /src/shell/install.sh >"$test_root/client-shell-reinstall.log"
+HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
+    CRED_FORWARD_ROLE=client /src/cred-forward/install.sh \
+    >"$test_root/client-install.log" 2>&1
+HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
+    /src/cred-forward/install.sh >"$test_root/client-reinstall.log" 2>&1
 [ "$(cat "$client_home/.local/share/cred-forward/role")" = client ]
+grep -Fq 'sudo /src/cred-forward/install/configure-sshd.sh' "$test_root/client-install.log"
+[ ! -e /etc/ssh/sshd_config.d/10-cred-forward.conf ]
+[ ! -e /etc/cred-forward/sshd-policy ]
+[ "$(grep -Fxc '# >>> devenv >>>' "$client_home/.bashrc")" = 1 ]
+[ "$(grep -Fxc '# >>> devenv >>>' "$client_home/.profile")" = 1 ]
 HOME=$client_home bash --noprofile --norc -i -c \
     'source "$HOME/.bashrc"; [ "$(type -P codex)" = "$HOME/.local/share/cred-forward/wrappers/codex" ]'
+HOME=$client_home bash --noprofile --norc -i -c '
+    source "$HOME/.profile"
+    [ "$(type -P gh)" = "$HOME/.local/share/cred-forward/wrappers/gh" ]
+    [ "$(type -P claude)" = "$HOME/.local/share/cred-forward/wrappers/claude" ]
+    [ "$(type -P codex)" = "$HOME/.local/share/cred-forward/wrappers/codex" ]
+'
 HOME=$client_home bash --noprofile --norc -c '
     PATH="$HOME/.local/bin:$HOME/.local/share/cred-forward/wrappers:/usr/bin:$HOME/.local/bin"
     source "$HOME/.bashrc"
@@ -251,6 +270,30 @@ HOME=$client_home bash --noprofile --norc -c '
     [ "$(type -P codex)" = "$HOME/.local/share/cred-forward/wrappers/codex" ]
     [ "$(printf "%s" "$PATH" | tr : "\n" | grep -Fxc "$HOME/.local/bin")" = 1 ]
 '
+
+# Reject a login profile that reorders PATH after it sources .bashrc, even
+# when the interactive profile itself resolves all wrappers correctly.
+mkdir -p "$client_home/.local/bin"
+for tool in gh claude codex; do
+    printf '%s\n' '#!/bin/sh' 'exit 0' >"$client_home/.local/bin/$tool"
+    chmod 0755 "$client_home/.local/bin/$tool"
+done
+cp -p "$client_home/.profile" "$test_root/client-profile.good"
+awk '
+    $0 == "# >>> devenv >>>" { skip=1 }
+    !skip { print }
+    $0 == "# <<< devenv <<<" { skip=0 }
+' "$client_home/.profile" >"$test_root/client-profile.bad"
+cp "$test_root/client-profile.bad" "$client_home/.profile"
+if HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
+    CRED_FORWARD_ROLE=client /src/cred-forward/install.sh \
+    >"$test_root/client-bad-profile.out" 2>"$test_root/client-bad-profile.err"; then
+    echo 'client setup unexpectedly accepted a reordered login PATH' >&2
+    exit 1
+fi
+grep -Fq "does not resolve to the credential wrapper in $client_home/.profile" \
+    "$test_root/client-bad-profile.err"
+cp -p "$test_root/client-profile.good" "$client_home/.profile"
 
 mac_home=$test_root/mac-home
 mkdir -p "$mac_home"
@@ -423,6 +466,94 @@ install -m 0600 "$test_root/id_ed25519.pub" /home/remote/.ssh/authorized_keys
 chown -R remote:remote /home/remote/.ssh /home/remote/.cache
 ssh-keygen -A
 mkdir -p /run/sshd
+# The root test harness owns the output files around the sudo invocation.
+# shellcheck disable=SC2024
+if sudo -u remote env HOME=/home/remote /src/cred-forward/install/configure-sshd.sh \
+    >"$test_root/admin-nonroot.out" 2>"$test_root/admin-nonroot.err"; then
+    echo 'SSH daemon setup unexpectedly ran without root' >&2
+    exit 1
+fi
+grep -Fq 'run this script with sudo' "$test_root/admin-nonroot.err"
+install -d -m 0755 /etc/ssh/sshd_config.d
+
+# A failed effective-policy check restores the exact previous file, including
+# its mode, and must not publish a validated-policy marker.
+cp -p /etc/ssh/sshd_config "$test_root/sshd_config.original"
+sed '\|^[[:space:]]*Include[[:space:]]\+/etc/ssh/sshd_config.d/\*\.conf|d' \
+    /etc/ssh/sshd_config >"$test_root/sshd_config.no-include"
+install -m 0644 "$test_root/sshd_config.no-include" /etc/ssh/sshd_config
+cat >/etc/ssh/sshd_config.d/10-cred-forward.conf <<'EOF'
+# Managed by devenv cred-forward.
+StreamLocalBindMask 0077
+StreamLocalBindUnlink no
+EOF
+chmod 0600 /etc/ssh/sshd_config.d/10-cred-forward.conf
+if /src/cred-forward/install/configure-sshd.sh \
+    >"$test_root/admin-rollback.out" 2>"$test_root/admin-rollback.err"; then
+    echo 'SSH daemon setup unexpectedly accepted an unloaded drop-in' >&2
+    exit 1
+fi
+grep -Fq 'Include /etc/ssh/sshd_config.d/*.conf' "$test_root/admin-rollback.err"
+grep -Eq '^StreamLocalBindMask[[:space:]]+0077$' \
+    /etc/ssh/sshd_config.d/10-cred-forward.conf
+[ "$(stat -c '%a' /etc/ssh/sshd_config.d/10-cred-forward.conf)" = 600 ]
+[ ! -e /etc/cred-forward/sshd-policy ]
+cp -p "$test_root/sshd_config.original" /etc/ssh/sshd_config
+rm -f /etc/ssh/sshd_config.d/10-cred-forward.conf
+
+printf '%s\n' '# administrator-owned file' \
+    >/etc/ssh/sshd_config.d/10-cred-forward.conf
+chmod 0644 /etc/ssh/sshd_config.d/10-cred-forward.conf
+if /src/cred-forward/install/configure-sshd.sh \
+    >"$test_root/admin-preserve.out" 2>"$test_root/admin-preserve.err"; then
+    echo 'SSH daemon setup unexpectedly replaced an unrelated drop-in' >&2
+    exit 1
+fi
+grep -Fq 'preserving existing' "$test_root/admin-preserve.err"
+grep -Fqx '# administrator-owned file' \
+    /etc/ssh/sshd_config.d/10-cred-forward.conf
+rm -f /etc/ssh/sshd_config.d/10-cred-forward.conf
+/src/cred-forward/install/configure-sshd.sh \
+    >"$test_root/admin-install.log" 2>&1
+grep -Eq '^StreamLocalBindMask[[:space:]]+0177$' \
+    /etc/ssh/sshd_config.d/10-cred-forward.conf
+grep -Eq '^StreamLocalBindUnlink[[:space:]]+yes$' \
+    /etc/ssh/sshd_config.d/10-cred-forward.conf
+grep -Eq '^StreamLocalBindMask[[:space:]]+0177$' \
+    /etc/cred-forward/sshd-policy
+grep -Eq '^StreamLocalBindUnlink[[:space:]]+yes$' \
+    /etc/cred-forward/sshd-policy
+[ "$(stat -c '%a' /etc/cred-forward/sshd-policy)" = 644 ]
+/usr/sbin/sshd -T >"$test_root/sshd-effective"
+grep -Eq '^streamlocalbindmask[[:space:]]+0177$' "$test_root/sshd-effective"
+grep -Eq '^streamlocalbindunlink[[:space:]]+yes$' "$test_root/sshd-effective"
+stat -c '%i:%Y' /etc/ssh/sshd_config.d/10-cred-forward.conf \
+    >"$test_root/admin-before"
+stat -c '%i:%Y' /etc/cred-forward/sshd-policy \
+    >>"$test_root/admin-before"
+sleep 1
+/src/cred-forward/install/configure-sshd.sh \
+    >"$test_root/admin-reinstall.log" 2>&1
+stat -c '%i:%Y' /etc/ssh/sshd_config.d/10-cred-forward.conf \
+    >"$test_root/admin-after"
+stat -c '%i:%Y' /etc/cred-forward/sshd-policy \
+    >>"$test_root/admin-after"
+cmp "$test_root/admin-before" "$test_root/admin-after"
+
+# RHEL-family systems can make the drop-in directory unreadable to users. The
+# validated marker remains sufficient for the unprivileged installer check.
+chmod 0700 /etc/ssh/sshd_config.d
+sudo -u remote env HOME=/home/remote DEVENV_HOME=/src SHELL=/bin/bash \
+    PATH=/usr/bin:/bin bash -c '
+        . /src/lib/common.sh
+        . /src/cred-forward/install/_configure.sh
+        sshd_policy_is_configured
+    '
+chmod 0755 /etc/ssh/sshd_config.d
+HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
+    /src/cred-forward/install.sh >"$test_root/client-after-admin.log" 2>&1
+grep -Fq 'SSH daemon policy supports safe credential socket replacement' \
+    "$test_root/client-after-admin.log"
 cat >"$test_root/sshd_config" <<EOF
 Port 2222
 ListenAddress 127.0.0.1

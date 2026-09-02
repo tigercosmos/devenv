@@ -123,6 +123,18 @@ profile_file() {
     esac
 }
 
+# additional_login_profile — a second profile that can change PATH after it
+# sources the primary profile. Stock Linux ~/.profile files do this for Bash.
+additional_login_profile() {
+    [ -z "${DEVENV_PROFILE:-}" ] || return 0
+    if [ "$(os)" = linux ]; then
+        case "${SHELL:-}" in
+            */zsh) ;;
+            *) echo "$HOME/.profile" ;;
+        esac
+    fi
+}
+
 # profile_shell FILE — which shell interprets FILE (zsh|bash).
 profile_shell() {
     case "$1" in *zsh*|*zprofile*) echo zsh ;; *) echo bash ;; esac

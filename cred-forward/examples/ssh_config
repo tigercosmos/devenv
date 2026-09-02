@@ -7,5 +7,5 @@ Host my-dev-host
     RemoteForward /home/my-user/.cache/cred.sock ${HOME}/.cache/cred-agent.sock
 
 # For a macOS remote, use /Users/my-user/.cache/cred.sock instead.
-# Set StreamLocalBindMask 0177 and StreamLocalBindUnlink yes in the remote
-# sshd_config when possible. These settings secure and replace stale sockets.
+# On the remote, run the administrator command printed by make install.
+# It sets StreamLocalBindMask 0177 and StreamLocalBindUnlink yes in sshd_config.

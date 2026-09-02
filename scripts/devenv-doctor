@@ -2,6 +2,7 @@
 # devenv-doctor — report the state of the devenv environment. Exit 1 if anything is missing.
 set -uo pipefail
 DEVENV_CALLER_PATH=$PATH
+# shellcheck disable=SC1091
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 rc=0
@@ -25,6 +26,7 @@ check_tool claude claude --version
 check_tool agent agent --version
 
 CRED_FORWARD_STATE_DIR="$HOME/.local/share/cred-forward"
+CRED_FORWARD_SSHD_STATE=/etc/cred-forward/sshd-policy
 CRED_FORWARD_ROLE=$(sed -n '1p' "$CRED_FORWARD_STATE_DIR/role" 2>/dev/null || true)
 CRED_FORWARD_WRAPPERS="$CRED_FORWARD_STATE_DIR/wrappers"
 if [ "$CRED_FORWARD_ROLE" = server ]; then
@@ -47,11 +49,24 @@ elif [ "$CRED_FORWARD_ROLE" = client ]; then
         if [ -x "$CRED_FORWARD_WRAPPERS/$tool" ]; then ok "credential wrapper $tool -> $CRED_FORWARD_WRAPPERS/$tool"
         else fail "credential wrapper $tool is missing (run: make cred-forward)"; rc=1; fi
     done
+    if [ -r "$CRED_FORWARD_SSHD_STATE" ] \
+        && grep -Eq '^[[:space:]]*StreamLocalBindMask[[:space:]]+0177([[:space:]]|$)' \
+            "$CRED_FORWARD_SSHD_STATE" \
+        && grep -Eq '^[[:space:]]*StreamLocalBindUnlink[[:space:]]+yes([[:space:]]|$)' \
+            "$CRED_FORWARD_SSHD_STATE"; then
+        ok "SSH daemon policy supports safe credential socket replacement"
+    else
+        warn "SSH daemon policy is pending (run: sudo $DEVENV_HOME/cred-forward/install/configure-sshd.sh)"
+    fi
 fi
 
 log "skills and tools"
 if [ "$(os)" = windows ]; then
-    have codexmon && check_tool codexmon codexmon version || warn "codexmon: not available for Windows"
+    if have codexmon; then
+        check_tool codexmon codexmon version
+    else
+        warn "codexmon: not available for Windows"
+    fi
 else
     check_tool codexmon codexmon version
 fi
@@ -87,6 +102,7 @@ if have codex; then
 fi
 
 PROFILE=$(profile_file)
+LOGIN_PROFILE=$(additional_login_profile)
 log "shell ($PROFILE)"
 if grep -qF '# >>> devenv >>>' "$PROFILE" 2>/dev/null; then ok "devenv block present"
 else fail "devenv block missing (run: make shell)"; rc=1; fi
@@ -111,8 +127,23 @@ if [ "$CRED_FORWARD_ROLE" = client ]; then
         *":$CRED_FORWARD_WRAPPERS:"*) ok "PATH contains $CRED_FORWARD_WRAPPERS" ;;
         *) warn "PATH of this shell lacks $CRED_FORWARD_WRAPPERS (open a new terminal after make install)" ;;
     esac
+    if [ -n "$LOGIN_PROFILE" ] && [ "$LOGIN_PROFILE" != "$PROFILE" ]; then
+        for tool in gh claude codex; do
+            resolved=$(profile_executable "$LOGIN_PROFILE" "$tool") || resolved=""
+            if [ "$resolved" = "$CRED_FORWARD_WRAPPERS/$tool" ]; then
+                ok "$tool resolves to its credential wrapper in the login profile"
+            else
+                fail "$tool does not resolve to its credential wrapper in $LOGIN_PROFILE"
+                rc=1
+            fi
+        done
+    fi
 fi
 
 echo
-[ $rc -eq 0 ] && ok "all checks passed" || fail "some checks failed"
+if [ "$rc" -eq 0 ]; then
+    ok "all checks passed"
+else
+    fail "some checks failed"
+fi
 exit $rc

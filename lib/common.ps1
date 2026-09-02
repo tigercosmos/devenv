@@ -58,6 +58,9 @@ function Add-UserPath($dir) {
     Refresh-Path
 }
 
+# Windows has one PowerShell login profile, so there is no second profile.
+function Get-AdditionalLoginProfile { $null }
+
 # Link every skill under ~/.claude/skills into another agent's skills directory.
 # An entry that is not our link is left alone unless -Force, which relinks it
 # (a real directory is moved to <target>\.devenv-backup first, never deleted).

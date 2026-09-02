@@ -6,6 +6,10 @@ param()
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\lib\common.ps1')
 
+# Keep the shared shell-profile contract explicit. Windows has no second one.
+$additionalLoginProfile = Get-AdditionalLoginProfile
+if ($additionalLoginProfile) { throw 'unexpected additional PowerShell profile' }
+
 $begin = '# >>> devenv >>>'
 $end = '# <<< devenv <<<'
 $block = @(

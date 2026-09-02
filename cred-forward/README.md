@@ -77,7 +77,24 @@ CRED_FORWARD_ROLE=client make install
 ```
 
 The installer puts `cred-client` in `~/.local/bin`. It puts the wrappers in
-`~/.local/share/cred-forward/wrappers` and activates them in the shell profile.
+`~/.local/share/cred-forward/wrappers` and activates them in the shell profiles.
+The user-level installation never runs `sudo`.
+
+The remote SSH daemon requires two settings for secure socket permissions and
+stale-socket replacement. If the settings are absent, `make install` prints
+this separate administrator command:
+
+```sh
+sudo ~/devenv/cred-forward/install/configure-sshd.sh
+```
+
+The script writes `/etc/ssh/sshd_config.d/10-cred-forward.conf`, validates the
+effective SSH configuration, and records the result in
+`/etc/cred-forward/sshd-policy`. On Linux, it reloads an active SSH service. On
+macOS, new connections load the policy without interrupting existing sessions.
+It preserves unrelated files at either path. Run the printed script path when
+the repository is not in `~/devenv`.
+
 Open a new SSH connection after both installations finish.
 
 ### 3. Verify the connection
@@ -145,17 +162,15 @@ local side, so do not use it for the remote path.
 
 The remote SSH server controls the mode and stale-file behavior for a remote
 Unix socket. The `0700` parent directory restricts access to the remote account.
-Configure `StreamLocalBindMask 0177` and `StreamLocalBindUnlink yes` in the
-remote `sshd_config` when possible. These server settings provide reliable
-permissions and stale-socket cleanup. Client-side options cannot enable them.
+The administrator script sets `StreamLocalBindMask 0177` and
+`StreamLocalBindUnlink yes`. These settings provide reliable permissions and
+stale-socket replacement. Client-side options cannot enable them.
 
 The generated client fragment does not set `ExitOnForwardFailure`. Therefore,
 a stale remote socket cannot lock you out of SSH, Orca, or VS Code. During
-initial host configuration, the server performs a best-effort cleanup when
-remote `ss` or `lsof` confirms that no process listens on the socket. If every
-SSH session is closed but `~/.cache/cred.sock` remains, remove that stale file
-on the remote and reconnect. Until then, the wrappers report that the forwarded
-socket is unavailable. See the OpenSSH
+initial host configuration, the server removes an inactive socket when remote
+`ss` or `lsof` confirms that no process listens on it. The SSH daemon policy
+replaces the inactive path on later connections. See the OpenSSH
 [`RemoteForward`](https://man.openbsd.org/ssh_config#RemoteForward) and remote
 [`StreamLocalBindMask`](https://man.openbsd.org/sshd_config#StreamLocalBindMask)
 documentation.

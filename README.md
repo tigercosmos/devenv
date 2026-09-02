@@ -27,8 +27,10 @@ The copy in `~/.local/bin` takes precedence over npm or Homebrew copies.
 On the first macOS or Linux run, `make install` asks whether this machine is a
 credential-forwarding server or client. Press Enter to select `server`.
 The server setup starts a user service and asks which SSH hosts to configure.
-The client setup activates the transparent wrappers. Later installs and
-`make update` reuse the saved role and SSH hosts.
+The client setup activates the transparent wrappers. It prints one separate
+`sudo` command when the SSH daemon needs its socket policy. `make install`
+never runs `sudo`. Later installs and `make update` reuse the saved role and
+SSH hosts.
 
 Set `CRED_FORWARD_ROLE=server` or `CRED_FORWARD_ROLE=client` for an unattended
 install. Set `CRED_FORWARD_HOSTS="sim0 sim4"` to configure server hosts without
@@ -43,7 +45,7 @@ newer. Windows does not install `cred-forward`.
 | 1 | `make deps` | `gh`, native-release `codex` and its `codex-code-mode-host` helper, `claude`, cursor `agent` | `~/.local/bin` (gh via Homebrew on macOS, winget on Windows) |
 | 2 | `make skills` | [codexmon](https://github.com/tigercosmos/codexmon), [code-cortex-mcp](https://github.com/tigercosmos/code-cortex-mcp), the skills in [skills/](skills/) | binaries in `~/.local/bin`, skills in `~/.claude/skills`, linked into `~/.codex/skills`, `~/.agents/skills`, `~/.cursor/skills` |
 | 3 | `make scripts` | the utility scripts in [scripts/](scripts/) | on `PATH` via step 4 |
-| 4 | `make shell` | a sourced block in the login profile | macOS `~/.zprofile`, Linux `~/.bashrc`, Windows `$PROFILE` |
+| 4 | `make shell` | a sourced block in the login profile | macOS `~/.zprofile`, Linux `~/.bashrc` and `~/.profile`, Windows `$PROFILE` |
 | 5 | `make cred-forward` | a local credential service and SSH forwarding, or the remote client and wrappers | user service files, `~/.ssh/config.d`, and `~/.local` |
 | 6 | `make doctor` | — | reports the result |
 

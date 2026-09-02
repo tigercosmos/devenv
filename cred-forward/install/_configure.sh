@@ -6,10 +6,13 @@ CRED_FORWARD_ROLE_FILE="$CRED_FORWARD_STATE_DIR/role"
 CRED_FORWARD_AGENT_CONFIG="$HOME/.config/cred-forward/agent.env"
 CRED_FORWARD_LOCAL_SOCKET="$HOME/.cache/cred-agent.sock"
 CRED_FORWARD_SSH_FRAGMENT="$HOME/.ssh/config.d/cred-forward.conf"
+CRED_FORWARD_SSHD_STATE=/etc/cred-forward/sshd-policy
 CRED_FORWARD_MANAGED_MARKER='Managed by devenv cred-forward.'
 CRED_FORWARD_AGENT_RESTART=0
 CRED_FORWARD_LAST_WRITE=0
 CRED_FORWARD_OLD_AGENT_PID=""
+CRED_FORWARD_ADMIN_ACTION_REQUIRED=0
+export CRED_FORWARD_ADMIN_ACTION_REQUIRED
 
 require_owner_only_regular_file() {
     local path="$1" mode
@@ -420,12 +423,42 @@ configure_cred_forward_server() {
 }
 
 verify_cred_forward_client_path() {
-    local profile tool resolved wrappers="$HOME/.local/share/cred-forward/wrappers"
+    local profile login_profile tool resolved
+    local wrappers="$HOME/.local/share/cred-forward/wrappers"
+    local -a profiles
     profile=$(profile_file)
-    for tool in gh claude codex; do
-        resolved=$(profile_executable "$profile" "$tool") || resolved=""
-        [ "$resolved" = "$wrappers/$tool" ] \
-            || die "$tool does not resolve to the credential wrapper in $profile"
+    login_profile=$(additional_login_profile)
+    profiles=("$profile")
+    if [ -n "$login_profile" ] && [ "$login_profile" != "$profile" ]; then
+        profiles+=("$login_profile")
+    fi
+    for profile in "${profiles[@]}"; do
+        for tool in gh claude codex; do
+            resolved=$(profile_executable "$profile" "$tool") || resolved=""
+            [ "$resolved" = "$wrappers/$tool" ] \
+                || die "$tool does not resolve to the credential wrapper in $profile"
+        done
+        ok "credential wrappers are active in $profile"
     done
-    ok "credential wrappers are active in the profile PATH"
+}
+
+sshd_policy_is_configured() {
+    [ -r "$CRED_FORWARD_SSHD_STATE" ] \
+        && grep -Eq '^[[:space:]]*StreamLocalBindMask[[:space:]]+0177([[:space:]]|$)' \
+            "$CRED_FORWARD_SSHD_STATE" \
+        && grep -Eq '^[[:space:]]*StreamLocalBindUnlink[[:space:]]+yes([[:space:]]|$)' \
+            "$CRED_FORWARD_SSHD_STATE"
+}
+
+request_ssh_server_setup() {
+    local admin_script="$DEVENV_HOME/cred-forward/install/configure-sshd.sh"
+    if sshd_policy_is_configured; then
+        ok "SSH daemon policy supports safe credential socket replacement"
+        return
+    fi
+    CRED_FORWARD_ADMIN_ACTION_REQUIRED=1
+    warn "administrator action is required for reliable SSH socket forwarding"
+    printf '%s\n' 'Run this separate command on the client machine:'
+    printf '  sudo %q\n' "$admin_script"
+    printf '%s\n' 'Then reconnect with SSH. make install never runs sudo.'
 }

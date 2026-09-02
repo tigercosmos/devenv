@@ -48,6 +48,11 @@ case "$role" in
     client)
         record_cred_forward_role "$role"
         verify_cred_forward_client_path
+        request_ssh_server_setup
         ;;
 esac
-ok "cred-forward installed and configured as $role"
+if [ "$CRED_FORWARD_ADMIN_ACTION_REQUIRED" = 1 ]; then
+    warn "cred-forward is installed as client; the printed administrator action remains"
+else
+    ok "cred-forward installed and configured as $role"
+fi
