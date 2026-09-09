@@ -14,7 +14,10 @@ HOME=$install_home ./install/install-linux.sh all >"$test_root/install.log"
 [ -x "$install_home/.local/bin/cred-agent" ]
 [ -x "$install_home/.local/bin/cred-client" ]
 [ -x "$install_home/.local/share/cred-forward/wrappers/gh" ]
+[ -x "$install_home/.local/share/cred-forward/wrappers/git-credential-cred-forward" ]
 [ "$(stat -c '%a' "$install_home/.cache")" = 700 ]
+cmp config/github-accounts "$install_home/.config/cred-forward/github-accounts"
+[ "$(stat -c '%a' "$install_home/.config/cred-forward/github-accounts")" = 600 ]
 find "$install_home/.local" -type f -exec stat -c '%n:%i:%Y:%a' {} + \
     | sort >"$test_root/install-before"
 sleep 1
@@ -34,6 +37,12 @@ fi
 FORCE=1 HOME=$preserve_home ./install/install-linux.sh client >"$test_root/force.log"
 grep -Rqx user-owned "$preserve_home/.local/share/cred-forward/.devenv-backup"
 cmp wrappers/gh "$preserve_home/.local/share/cred-forward/wrappers/gh"
+
+# The account map is user configuration: FORCE=1 must not replace an edited one.
+mkdir -p "$preserve_home/.config/cred-forward"
+printf '%s\n' 'my-org my-login' >"$preserve_home/.config/cred-forward/github-accounts"
+FORCE=1 HOME=$preserve_home ./install/install-linux.sh client >"$test_root/force-config.log"
+[ "$(cat "$preserve_home/.config/cred-forward/github-accounts")" = 'my-org my-login' ]
 
 printf '\n# upgraded\n' >>wrappers/gh
 HOME=$install_home ./install/install-linux.sh client >"$test_root/upgrade.log"
@@ -121,7 +130,11 @@ cat >"$server_home/.local/bin/gh" <<'EOF'
 #!/bin/sh
 set -eu
 [ "$1 $2" = 'auth token' ]
-printf github-login
+if [ "${3:-} ${4:-} ${5:-}" = '--hostname github.com --user' ]; then
+    printf 'github-login-%s' "$6"
+else
+    printf github-login
+fi
 EOF
 chmod 0755 "$server_home/.local/bin/systemctl" "$server_home/.local/bin/ssh" "$server_home/.local/bin/gh"
 printf '%s\n' '{"tokens":{"access_token":"chatgpt-login","account_id":"account-id"}}' \
@@ -152,6 +165,9 @@ fi
 HOME=$server_home CRED_FORWARD_SOCKET="$server_home/.cache/cred-agent.sock" \
     /src/cred-forward/dist/linux-amd64/cred-client github >"$test_root/server-github"
 [ "$(cat "$test_root/server-github")" = github-login ]
+CRED_FORWARD_SOCKET=$server_home/.cache/cred-agent.sock \
+    /src/cred-forward/dist/linux-amd64/cred-client github anchi-t2 >"$test_root/server-github-account"
+[ "$(cat "$test_root/server-github-account")" = github-login-anchi-t2 ]
 HOME=$server_home CRED_FORWARD_SOCKET="$server_home/.cache/cred-agent.sock" \
     /src/cred-forward/dist/linux-amd64/cred-client anthropicoauth >"$test_root/server-claude"
 [ "$(cat "$test_root/server-claude")" = claude-login ]
@@ -239,6 +255,8 @@ cat >"$client_home/.profile" <<'EOF'
 export PATH="$HOME/.local/bin:$PATH"
 EOF
 client_path="/usr/local/go/bin:/usr/bin:/bin"
+printf '%s\n' '[credential "https://github.com"]' '	helper = ' '	helper = !/usr/bin/gh auth git-credential' \
+    >"$client_home/.gitconfig"
 HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
     /src/shell/install.sh >"$test_root/client-shell-install.log"
 HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
@@ -249,6 +267,14 @@ HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
 HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
     /src/cred-forward/install.sh >"$test_root/client-reinstall.log" 2>&1
 [ "$(cat "$client_home/.local/share/cred-forward/role")" = client ]
+# The client install routes HTTPS git credentials through the helper, once,
+# after any helper that gh auth setup-git configured earlier.
+[ "$(HOME=$client_home git config --global --get-all include.path | grep -Fxc '~/.config/cred-forward/gitconfig')" = 1 ]
+[ "$(HOME=$client_home git config --global --includes --get-all credential.https://github.com.helper | sed -n '$p')" \
+    = "!$client_home/.local/share/cred-forward/wrappers/git-credential-cred-forward" ]
+[ "$(HOME=$client_home git config --global --includes --get credential.https://github.com.useHttpPath)" = true ]
+grep -Fq '!/usr/bin/gh auth git-credential' "$client_home/.gitconfig"
+[ -f "$client_home/.local/share/cred-forward/.devenv-backup/"*/gitconfig ]
 grep -Fq 'sudo /src/cred-forward/install/configure-sshd.sh' "$test_root/client-install.log"
 [ ! -e /etc/ssh/sshd_config.d/10-cred-forward.conf ]
 [ ! -e /etc/cred-forward/sshd-policy ]
@@ -365,6 +391,8 @@ HOME=$existing_cache_home ./install/install-linux.sh agent >"$test_root/existing
 [ "$(stat -c '%a' "$existing_cache_home/.cache")" = 755 ]
 
 export CRED_AGENT_GITHUB=fake-github-token
+export CRED_AGENT_GITHUB_TOKEN_ANCHI_T2=fake-work-token
+export CRED_AGENT_GITHUB_TOKEN_TIGERCOSMOS=fake-personal-token
 export CRED_AGENT_ANTHROPIC=fake-anthropic-token
 export CRED_AGENT_OPENAI=fake-openai-token
 local_socket=$test_root/cred-agent.sock
@@ -379,14 +407,15 @@ done
 
 mkdir -p "$test_root/real" "$test_root/wrappers"
 cp wrappers/* "$test_root/wrappers/"
-chmod +x "$test_root/wrappers/gh" "$test_root/wrappers/claude" "$test_root/wrappers/codex"
+chmod +x "$test_root/wrappers/gh" "$test_root/wrappers/claude" "$test_root/wrappers/codex" \
+    "$test_root/wrappers/git-credential-cred-forward"
 for tool in gh claude codex; do
     cat >"$test_root/real/$tool" <<'EOF'
 #!/bin/sh
 set -eu
 
 case "$(basename "$0")" in
-    gh) test "$GH_TOKEN" = fake-github-token ;;
+    gh) test "$GH_TOKEN" = "${EXPECT_GH_TOKEN:-fake-github-token}" ;;
     claude)
         if [ "${EXPECT_LOGIN_KIND:-api}" = oauth ]; then
             test "$CLAUDE_CODE_OAUTH_TOKEN" = fake-anthropic-oauth-token
@@ -426,6 +455,80 @@ export PATH="$test_root/wrappers:$test_root/real:$PATH"
 [ "$(gh test-argument)" = wrapper-ok:gh ]
 [ "$(claude test-argument)" = wrapper-ok:claude ]
 [ "$(codex test-argument)" = wrapper-ok:codex ]
+
+# The gh wrapper selects the login from the repository owner. Without an
+# account map it keeps using the active login.
+[ "$(CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/missing-map gh pr list -R t2-auto/proj)" = wrapper-ok:gh ]
+export CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/github-accounts
+cp config/github-accounts "$CRED_FORWARD_GITHUB_ACCOUNTS"
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh pr list -R t2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh pr list --repo=https://github.com/T2-Auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token GH_REPO=t2-auto/proj gh pr list)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh pr list -R=t2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh pr list -Rt2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh repo clone t2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh repo clone -- t2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh repo view --web t2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-personal-token gh repo view cli/cli)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-personal-token gh issue create docs/readme)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-personal-token gh test-argument)" = wrapper-ok:gh ]
+git init -q "$test_root/work-repo"
+git -C "$test_root/work-repo" remote add origin git@github.com:t2-auto/proj.git
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-work-token gh pr list)" = wrapper-ok:gh ]
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-personal-token gh pr list -R tigercosmos/devenv)" = wrapper-ok:gh ]
+# Option values and non-repo operands never override the checkout's owner,
+# but an explicit repository operand does.
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-work-token gh pr create --title demo --body tigercosmos/devenv)" = wrapper-ok:gh ]
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-work-token gh issue create tigercosmos/devenv)" = wrapper-ok:gh ]
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-personal-token gh repo view cli/cli)" = wrapper-ok:gh ]
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-personal-token gh repo view -- cli/cli)" = wrapper-ok:gh ]
+# A non-GitHub upstream does not hide a GitHub origin.
+git -C "$test_root/work-repo" remote add upstream https://gitlab.com/mirror/proj.git
+[ "$(cd "$test_root/work-repo" && EXPECT_GH_TOKEN=fake-work-token gh pr list)" = wrapper-ok:gh ]
+git init -q "$test_root/personal-repo"
+git -C "$test_root/personal-repo" remote add origin https://github.com/tigercosmos/devenv.git
+[ "$(cd "$test_root/personal-repo" && EXPECT_GH_TOKEN=fake-personal-token gh pr list)" = wrapper-ok:gh ]
+# CRLF maps and comments parse; a malformed account fails closed.
+printf '# comment\r\n\r\nT2-AUTO anchi-t2\r\n* tigercosmos\r\n' >"$test_root/crlf-map"
+[ "$(CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/crlf-map EXPECT_GH_TOKEN=fake-work-token gh pr list -R t2-auto/proj)" = wrapper-ok:gh ]
+printf '%s\n' '* bad;login' >"$test_root/bad-map"
+if CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/bad-map gh test-argument 2>/dev/null; then
+    echo "gh wrapper unexpectedly accepted a malformed account map" >&2
+    exit 1
+fi
+if CRED_FORWARD_GITHUB_ACCOUNT=nobody gh test-argument 2>/dev/null; then
+    echo "gh wrapper unexpectedly succeeded for an unconfigured account" >&2
+    exit 1
+fi
+# The git credential helper answers from the same map and never stores.
+helper=$test_root/wrappers/git-credential-cred-forward
+credential_fill() {
+    printf 'protocol=%s\nhost=%s\n%s\n' "$1" "$2" "${3:+path=$3}" | "$helper" get
+}
+[ "$(credential_fill https github.com t2-auto/proj.git)" = "$(printf 'username=anchi-t2\npassword=fake-work-token')" ]
+[ "$(credential_fill https github.com cli/cli)" = "$(printf 'username=tigercosmos\npassword=fake-personal-token')" ]
+[ "$(credential_fill https github.com '')" = "$(printf 'username=tigercosmos\npassword=fake-personal-token')" ]
+[ "$(cd "$test_root/work-repo" && credential_fill https github.com '')" = "$(printf 'username=anchi-t2\npassword=fake-work-token')" ]
+[ -z "$(credential_fill https gitlab.com t2-auto/proj.git)" ]
+[ -z "$(credential_fill http github.com t2-auto/proj.git)" ]
+[ -z "$(printf 'protocol=https\nhost=github.com\nusername=x\npassword=y\n\n' | "$helper" store)" ]
+[ -z "$(printf 'protocol=https\nhost=github.com\n\n' | "$helper" erase)" ]
+[ "$(CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/missing-map credential_fill https github.com t2-auto/proj.git)" \
+    = "$(printf 'username=x-access-token\npassword=fake-github-token')" ]
+if CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/bad-map credential_fill https github.com t2-auto/proj.git >/dev/null 2>&1; then
+    echo "git credential helper unexpectedly accepted a malformed account map" >&2
+    exit 1
+fi
+# git itself reaches the helper through the managed include.
+git_home=$test_root/git-home
+mkdir -p "$git_home/.config/cred-forward"
+cp config/github-accounts "$git_home/.config/cred-forward/github-accounts"
+printf '%s\n' '# managed' '[credential "https://github.com"]' '	helper =' "	helper = !$helper" '	useHttpPath = true' \
+    >"$git_home/.config/cred-forward/gitconfig"
+printf '%s\n' '[include]' '	path = ~/.config/cred-forward/gitconfig' >"$git_home/.gitconfig"
+[ "$(printf 'url=https://github.com/t2-auto/proj.git\n\n' | HOME=$git_home git credential fill | grep '^password=')" = password=fake-work-token ]
+[ "$(printf 'url=https://github.com/tigercosmos/devenv.git\n\n' | HOME=$git_home git credential fill | grep '^password=')" = password=fake-personal-token ]
+unset CRED_FORWARD_GITHUB_ACCOUNTS
 
 mkdir -p "$test_root/symlink-bin"
 for tool in gh claude codex; do
@@ -593,6 +696,10 @@ ssh "${ssh_forward_opts[@]}" remote@127.0.0.1 \
     CRED_FORWARD_SOCKET=/home/remote/.cache/cred.sock /tmp/cred-client github \
     >"$test_root/forwarded-token"
 [ "$(cat "$test_root/forwarded-token")" = fake-github-token ]
+ssh "${ssh_forward_opts[@]}" remote@127.0.0.1 \
+    CRED_FORWARD_SOCKET=/home/remote/.cache/cred.sock /tmp/cred-client github anchi-t2 \
+    >"$test_root/forwarded-account-token"
+[ "$(cat "$test_root/forwarded-account-token")" = fake-work-token ]
 
 # The root test harness owns the output files around the sudo invocation.
 # shellcheck disable=SC2024

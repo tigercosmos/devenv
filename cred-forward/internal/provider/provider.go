@@ -27,14 +27,32 @@ type Source interface {
 	Credential(context.Context) (string, error)
 }
 
+// AccountSource is a Source that also serves named accounts of one service.
+type AccountSource interface {
+	Source
+	// Account returns the source for one account. It never returns nil.
+	Account(name string) Source
+}
+
 // Registry maps protocol service names to provider chains.
 type Registry map[string]Source
 
-// Credential retrieves a credential from a registered source.
-func (r Registry) Credential(ctx context.Context, service string) (string, error) {
+// Credential retrieves a credential from a registered source. A non-empty
+// account selects a named login of a service whose source is an AccountSource.
+func (r Registry) Credential(ctx context.Context, service, account string) (string, error) {
 	source, ok := r[service]
 	if !ok {
 		return "", fmt.Errorf("unknown service")
+	}
+	if account != "" {
+		if !protocol.ValidAccount(account) {
+			return "", ErrInvalidValue
+		}
+		accounts, ok := source.(AccountSource)
+		if !ok {
+			return "", ErrNotConfigured
+		}
+		source = accounts.Account(account)
 	}
 	value, err := source.Credential(ctx)
 	if err != nil {
@@ -44,6 +62,22 @@ func (r Registry) Credential(ctx context.Context, service string) (string, error
 		return "", err
 	}
 	return value, nil
+}
+
+// Accounts serves a default login and builds sources for named accounts.
+type Accounts struct {
+	Default    Source
+	ForAccount func(name string) Source
+}
+
+// Credential implements Source with the default login.
+func (a Accounts) Credential(ctx context.Context) (string, error) {
+	return a.Default.Credential(ctx)
+}
+
+// Account implements AccountSource.
+func (a Accounts) Account(name string) Source {
+	return a.ForAccount(name)
 }
 
 // Env reads a credential from one environment variable.
@@ -317,11 +351,29 @@ func NewDefaultRegistry() Registry {
 		registry["anthropicoauth"] = append(registry["anthropicoauth"].(Chain), Env{Name: "CLAUDE_CODE_OAUTH_TOKEN"})
 		registry["openai"] = append(registry["openai"].(Chain), Env{Name: "OPENAI_API_KEY"})
 	}
-	registry["github"] = append(registry["github"].(Chain), Executable{Name: "gh", Args: []string{"auth", "token"}})
+	registry["github"] = Accounts{
+		Default:    append(registry["github"].(Chain), Executable{Name: "gh", Args: []string{"auth", "token"}}),
+		ForAccount: gitHubAccountSource,
+	}
 	registry["anthropicoauth"] = append(registry["anthropicoauth"].(Chain), TextFile{Path: "~/.local/share/cred-forward/secrets/claude-oauth"})
 	registry["openaichatgpt"] = append(registry["openaichatgpt"].(Chain), JSONFile{Path: "~/.codex/auth.json", Keys: []string{"tokens", "access_token"}})
 	registry["openaiaccount"] = append(registry["openaiaccount"].(Chain), JSONFile{Path: "~/.codex/auth.json", Keys: []string{"tokens", "account_id"}})
 	return registry
+}
+
+// gitHubAccountSource reads a named github.com login. CRED_AGENT_GITHUB_TOKEN_<NAME>
+// and CRED_AGENT_GITHUB_COMMAND_<NAME> override the local gh login, where <NAME>
+// is the account in upper case with hyphens replaced by underscores. The account
+// is the suffix of both names so that no account can address another one's
+// variable. The hostname is pinned so an ambient GH_HOST cannot substitute an
+// Enterprise login for a github.com request.
+func gitHubAccountSource(account string) Source {
+	name := strings.ToUpper(strings.ReplaceAll(account, "-", "_"))
+	return Chain{
+		Env{Name: "CRED_AGENT_GITHUB_TOKEN_" + name},
+		Command{EnvName: "CRED_AGENT_GITHUB_COMMAND_" + name},
+		Executable{Name: "gh", Args: []string{"auth", "token", "--hostname", "github.com", "--user", account}},
+	}
 }
 
 func validate(value string) error {

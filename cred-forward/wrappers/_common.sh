@@ -104,3 +104,151 @@ cred_forward_json_string() {
     cf_escaped=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
     printf '"%s"\n' "$cf_escaped"
 }
+
+# cred_forward_github_owner URL-OR-SPEC
+# Prints the repository owner for a github.com remote URL, an OWNER/REPO
+# spec, or a HOST/OWNER/REPO spec. Fails for other hosts and other shapes.
+cred_forward_github_owner() {
+    cf_spec=$1
+    case $cf_spec in
+        *'
+'*|'') return 1 ;;
+        *://*)
+            # ssh://git@github.com/owner/repo or https://github.com/owner/repo
+            cf_spec=${cf_spec#*://}
+            cf_spec=${cf_spec#*@}
+            ;;
+        *@*:*)
+            # git@github.com:owner/repo
+            cf_spec=${cf_spec#*@}
+            cf_spec=$(printf '%s' "$cf_spec" | sed 's|:|/|')
+            ;;
+        */*/*) ;;
+        */*) cf_spec=github.com/$cf_spec ;;
+        *) return 1 ;;
+    esac
+    cf_host=${cf_spec%%/*}
+    cf_host=${cf_host%:*}
+    cf_rest=${cf_spec#*/}
+    cf_owner=${cf_rest%%/*}
+    cf_repo=${cf_rest#*/}
+    [ "$cf_host" = github.com ] || return 1
+    [ -n "$cf_owner" ] && [ "$cf_rest" != "$cf_owner" ] && [ -n "$cf_repo" ] || return 1
+    case $cf_owner in
+        -*|*[!A-Za-z0-9-]*) return 1 ;;
+    esac
+    printf '%s\n' "$cf_owner"
+}
+
+# cred_forward_github_map_owner FILE OWNER
+# Prints the account that FILE maps OWNER to. Fails when neither the owner
+# nor "*" is listed, or when the matching account is not a GitHub login.
+cred_forward_github_map_owner() {
+    cf_file=$1
+    cf_wanted=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
+    cf_default=
+    cf_found=
+    while IFS= read -r cf_line || [ -n "$cf_line" ]; do
+        cf_line=${cf_line%}
+        case $cf_line in ''|'#'*) continue ;; esac
+        # The "*" fallback owner must not glob against the current directory.
+        set -f
+        # shellcheck disable=SC2086
+        set -- $cf_line
+        set +f
+        [ $# -ge 2 ] || continue
+        cf_owner=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+        if [ "$cf_owner" = '*' ]; then
+            [ -n "$cf_default" ] || cf_default=$2
+        elif [ "$cf_owner" = "$cf_wanted" ]; then
+            cf_found=$2
+            break
+        fi
+    done <"$cf_file"
+    [ -n "$cf_found" ] || cf_found=$cf_default
+    [ -n "$cf_found" ] || return 1
+    case $cf_found in
+        -*|*[!A-Za-z0-9-]*)
+            echo "cred-forward: invalid account in $cf_file: $cf_found" >&2
+            return 1
+            ;;
+    esac
+    printf '%s\n' "$cf_found"
+}
+
+# cred_forward_github_repo_owner
+# Prints the owner of the github.com repository in the current directory,
+# using the remotes in gh's order of preference and skipping other hosts.
+cred_forward_github_repo_owner() {
+    command -v git >/dev/null 2>&1 || return 1
+    cf_remotes=$(git remote 2>/dev/null) || return 1
+    for cf_remote in upstream github origin $cf_remotes; do
+        cf_url=$(git config --get "remote.$cf_remote.url" 2>/dev/null) || continue
+        cf_owner=$(cred_forward_github_owner "$cf_url") || continue
+        printf '%s\n' "$cf_owner"
+        return
+    done
+    return 1
+}
+
+# cred_forward_github_account FILE ARGS...
+# Prints the gh login for this invocation, or nothing to use the active
+# login. The owner comes from --repo/-R or GH_REPO first, then from the
+# repository operand of a "gh repo" command, then from the repository in
+# the current directory. FILE maps the owner, or "*", to the login.
+cred_forward_github_account() {
+    cf_map=$1
+    shift
+    if [ -n "${CRED_FORWARD_GITHUB_ACCOUNT:-}" ]; then
+        printf '%s\n' "$CRED_FORWARD_GITHUB_ACCOUNT"
+        return
+    fi
+    [ -f "$cf_map" ] || return 0
+    cf_explicit=${GH_REPO:-}
+    cf_operand=
+    cf_command=
+    cf_take_repo=0
+    cf_options_done=0
+    for cf_arg in "$@"; do
+        if [ "$cf_take_repo" = 1 ]; then
+            cf_explicit=$cf_arg
+            cf_take_repo=0
+            continue
+        fi
+        if [ "$cf_options_done" != 1 ]; then
+            case $cf_arg in
+                -R|--repo) cf_take_repo=1; continue ;;
+                --repo=*) cf_explicit=${cf_arg#--repo=}; continue ;;
+                -R=*) cf_explicit=${cf_arg#-R=}; continue ;;
+                -R?*) cf_explicit=${cf_arg#-R}; continue ;;
+                --) cf_options_done=1; continue ;;
+                # Other options may take a value; the operand scan below only
+                # trusts the well-known "gh repo SUBCOMMAND REPOSITORY" shape.
+                -*) continue ;;
+            esac
+        fi
+        case $cf_command in
+            '') cf_command=$cf_arg ;;
+            repo) cf_command=repo/$cf_arg ;;
+            repo/*) [ -n "$cf_operand" ] || cf_operand=$cf_arg ;;
+        esac
+    done
+    cf_owner=
+    if [ -n "$cf_explicit" ]; then
+        cf_owner=$(cred_forward_github_owner "$cf_explicit") || cf_owner=
+    fi
+    if [ -z "$cf_owner" ] && [ -n "$cf_operand" ]; then
+        cf_owner=$(cred_forward_github_owner "$cf_operand") || cf_owner=
+    fi
+    cred_forward_github_resolve_account "$cf_map" "$cf_owner"
+}
+
+# cred_forward_github_resolve_account FILE OWNER
+# Maps OWNER through FILE. An empty OWNER falls back to the repository in
+# the current directory, then to the "*" entry.
+cred_forward_github_resolve_account() {
+    cf_map=$1
+    cf_owner=$2
+    [ -n "$cf_owner" ] || cf_owner=$(cred_forward_github_repo_owner) || cf_owner=
+    cred_forward_github_map_owner "$cf_map" "${cf_owner:-*}"
+}

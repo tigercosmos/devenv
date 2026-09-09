@@ -14,6 +14,7 @@ const (
 	Version       = "CRED/1"
 	MaxHeaderSize = 256
 	MaxCredential = 64 * 1024
+	MaxAccount    = 39
 	ServiceList   = "github, anthropic, anthropicoauth, openai, openaichatgpt, or openaiaccount"
 )
 
@@ -23,26 +24,41 @@ var (
 	ErrCredentialTooLarge = errors.New("credential is too large")
 )
 
-// WriteRequest writes one credential request.
-func WriteRequest(w io.Writer, service string) error {
+// WriteRequest writes one credential request. An empty account selects the
+// service's default login.
+func WriteRequest(w io.Writer, service, account string) error {
 	if !ValidService(service) {
 		return ErrInvalidRequest
 	}
-	_, err := fmt.Fprintf(w, "%s GET %s\n", Version, service)
+	if account == "" {
+		_, err := fmt.Fprintf(w, "%s GET %s\n", Version, service)
+		return err
+	}
+	if !ValidAccount(account) {
+		return ErrInvalidRequest
+	}
+	_, err := fmt.Fprintf(w, "%s GET %s %s\n", Version, service, account)
 	return err
 }
 
-// ReadRequest reads one credential request.
-func ReadRequest(r *bufio.Reader) (string, error) {
+// ReadRequest reads one credential request and returns its service and
+// optional account.
+func ReadRequest(r *bufio.Reader) (service, account string, err error) {
 	line, err := readHeader(r)
 	if err != nil {
-		return "", ErrInvalidRequest
+		return "", "", ErrInvalidRequest
 	}
 	parts := strings.Split(line, " ")
-	if len(parts) != 3 || parts[0] != Version || parts[1] != "GET" || !validServiceName(parts[2]) {
-		return "", ErrInvalidRequest
+	if len(parts) < 3 || len(parts) > 4 || parts[0] != Version || parts[1] != "GET" || !validServiceName(parts[2]) {
+		return "", "", ErrInvalidRequest
 	}
-	return parts[2], nil
+	if len(parts) == 4 {
+		if !ValidAccount(parts[3]) {
+			return "", "", ErrInvalidRequest
+		}
+		account = parts[3]
+	}
+	return parts[2], account, nil
 }
 
 // WriteCredential writes a successful, length-framed response.
@@ -104,6 +120,22 @@ func ValidService(service string) bool {
 	default:
 		return false
 	}
+}
+
+// ValidAccount reports whether an account name uses the GitHub login syntax:
+// up to 39 ASCII letters, digits, or hyphens, without a leading hyphen.
+func ValidAccount(account string) bool {
+	if account == "" || len(account) > MaxAccount || account[0] == '-' {
+		return false
+	}
+	for _, char := range account {
+		switch {
+		case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z', char >= '0' && char <= '9', char == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func readHeader(r *bufio.Reader) (string, error) {

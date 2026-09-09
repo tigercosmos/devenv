@@ -49,6 +49,12 @@ elif [ "$CRED_FORWARD_ROLE" = client ]; then
         if [ -x "$CRED_FORWARD_WRAPPERS/$tool" ]; then ok "credential wrapper $tool -> $CRED_FORWARD_WRAPPERS/$tool"
         else fail "credential wrapper $tool is missing (run: make cred-forward)"; rc=1; fi
     done
+    if [ -f "$HOME/.config/cred-forward/github-accounts" ]; then ok "gh account map -> $HOME/.config/cred-forward/github-accounts"
+    else warn "no gh account map; the gh wrapper uses the active local login for every repository"; fi
+    if have git && git config --global --includes --get-all credential.https://github.com.helper 2>/dev/null \
+        | sed -n '$p' | grep -Fq "$CRED_FORWARD_WRAPPERS/git-credential-cred-forward"; then
+        ok "HTTPS git credentials for github.com use the forwarded login"
+    else fail "HTTPS git credentials for github.com do not use cred-forward (run: make cred-forward)"; rc=1; fi
     if [ -r "$CRED_FORWARD_SSHD_STATE" ] \
         && grep -Eq '^[[:space:]]*StreamLocalBindMask[[:space:]]+0177([[:space:]]|$)' \
             "$CRED_FORWARD_SSHD_STATE" \

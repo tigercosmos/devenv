@@ -99,26 +99,30 @@ func (s Server) handle(ctx context.Context, conn net.Conn) {
 		peer = strconv.Itoa(pid)
 	}
 	service := "-"
+	account := "-"
 	status := "invalid-request"
-	defer func() { s.logRequest(service, status, peer) }()
+	defer func() { s.logRequest(service, account, status, peer) }()
 	timeout := s.Timeout
 	if timeout == 0 {
 		timeout = 15 * time.Second
 	}
 	_ = conn.SetDeadline(time.Now().Add(timeout))
 	reader := bufio.NewReaderSize(conn, protocol.MaxHeaderSize)
-	requestedService, err := protocol.ReadRequest(reader)
+	requestedService, requestedAccount, err := protocol.ReadRequest(reader)
 	if err != nil {
 		_ = protocol.WriteError(conn, "invalid-request")
 		return
 	}
 	service = requestedService
+	if requestedAccount != "" {
+		account = requestedAccount
+	}
 	if !protocol.ValidService(service) {
 		status = "unknown-service"
 		_ = protocol.WriteError(conn, "unknown-service")
 		return
 	}
-	credential, err := s.Providers.Credential(ctx, service)
+	credential, err := s.Providers.Credential(ctx, service, requestedAccount)
 	if err != nil {
 		status = "unavailable"
 		_ = protocol.WriteError(conn, "unavailable")
@@ -132,13 +136,13 @@ func (s Server) handle(ctx context.Context, conn net.Conn) {
 	status = "ok"
 }
 
-func (s Server) logRequest(service, status, peer string) {
+func (s Server) logRequest(service, account, status, peer string) {
 	if s.AuditLog == nil {
 		return
 	}
 	s.AuditLog.Printf(
-		"timestamp=%s service=%s status=%s peer_pid=%s",
-		time.Now().UTC().Format(time.RFC3339), service, status, peer,
+		"timestamp=%s service=%s account=%s status=%s peer_pid=%s",
+		time.Now().UTC().Format(time.RFC3339), service, account, status, peer,
 	)
 }
 

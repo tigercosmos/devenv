@@ -30,14 +30,14 @@ func TestGetReportsResponseTimeout(t *testing.T) {
 		}
 	}()
 
-	_, err = client.Get(listener.Addr().String(), "github", 50*time.Millisecond)
+	_, err = client.Get(listener.Addr().String(), "github", "", 50*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "timed out waiting") {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestGetListsEverySupportedService(t *testing.T) {
-	_, err := client.Get("/does/not/matter", "invalid", time.Second)
+	_, err := client.Get("/does/not/matter", "invalid", "", time.Second)
 	if err == nil {
 		t.Fatal("invalid service unexpectedly accepted")
 	}

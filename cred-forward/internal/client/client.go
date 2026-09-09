@@ -12,10 +12,13 @@ import (
 	"github.com/tigercosmos/devenv/cred-forward/internal/protocol"
 )
 
-// Get retrieves one credential.
-func Get(socketPath, service string, timeout time.Duration) (string, error) {
+// Get retrieves one credential. An empty account selects the default login.
+func Get(socketPath, service, account string, timeout time.Duration) (string, error) {
 	if !protocol.ValidService(service) {
 		return "", fmt.Errorf("service must be %s", protocol.ServiceList)
+	}
+	if account != "" && !protocol.ValidAccount(account) {
+		return "", errors.New("account must be a GitHub login: letters, digits, and hyphens")
 	}
 	if timeout == 0 {
 		timeout = 20 * time.Second
@@ -26,7 +29,7 @@ func Get(socketPath, service string, timeout time.Duration) (string, error) {
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(timeout))
-	if err := protocol.WriteRequest(conn, service); err != nil {
+	if err := protocol.WriteRequest(conn, service, account); err != nil {
 		return "", errors.New("send credential request")
 	}
 	credential, remoteCode, err := protocol.ReadResponse(bufio.NewReaderSize(conn, protocol.MaxHeaderSize))

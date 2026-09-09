@@ -48,6 +48,7 @@ case "$role" in
     client)
         record_cred_forward_role "$role"
         verify_cred_forward_client_path
+        configure_git_credentials
         request_ssh_server_setup
         ;;
 esac

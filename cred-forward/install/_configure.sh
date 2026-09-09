@@ -4,6 +4,7 @@
 CRED_FORWARD_STATE_DIR="$HOME/.local/share/cred-forward"
 CRED_FORWARD_ROLE_FILE="$CRED_FORWARD_STATE_DIR/role"
 CRED_FORWARD_AGENT_CONFIG="$HOME/.config/cred-forward/agent.env"
+CRED_FORWARD_GIT_CONFIG="$HOME/.config/cred-forward/gitconfig"
 CRED_FORWARD_LOCAL_SOCKET="$HOME/.cache/cred-agent.sock"
 CRED_FORWARD_SSH_FRAGMENT="$HOME/.ssh/config.d/cred-forward.conf"
 CRED_FORWARD_SSHD_STATE=/etc/cred-forward/sshd-policy
@@ -444,6 +445,46 @@ verify_cred_forward_client_path() {
         done
         ok "credential wrappers are active in $profile"
     done
+}
+
+# Route HTTPS git credentials for github.com through the forwarded login.
+# The managed file is included from the end of the global git config, so its
+# helper reset overrides an earlier "gh auth setup-git" entry.
+configure_git_credentials() {
+    local helper="$HOME/.local/share/cred-forward/wrappers/git-credential-cred-forward"
+    local include="$CRED_FORWARD_GIT_CONFIG" content backup_dir global_config last
+    if ! have git; then
+        warn "git is not installed; HTTPS git credentials are not forwarded"
+        return
+    fi
+    content="# $CRED_FORWARD_MANAGED_MARKER
+[credential \"https://github.com\"]
+	helper =
+	helper = !$helper
+	useHttpPath = true"
+    install_managed_text "$include" 0600 gitconfig "$content"
+    # git expands the tilde in include.path itself; keep the value portable.
+    # shellcheck disable=SC2088
+    if git config --global --includes --get-all include.path 2>/dev/null \
+        | grep -Fxq -e "$include" -e "~/.config/cred-forward/gitconfig"; then
+        ok "global git config already includes $include"
+    else
+        # git exits 128 when no global config exists yet; that is not an error.
+        global_config=$(git config --global --list --show-origin 2>/dev/null \
+            | sed -n 's/^file:\([^\t]*\)\t.*/\1/p' | sed -n '1p' || true)
+        if [ -n "$global_config" ] && [ -f "$global_config" ]; then
+            backup_dir="$CRED_FORWARD_STATE_DIR/.devenv-backup/$(date +%Y%m%d%H%M%S)-$$"
+            mkdir -p "$backup_dir"
+            cp -p "$global_config" "$backup_dir/gitconfig"
+        fi
+        # shellcheck disable=SC2088
+        git config --global --add include.path "~/.config/cred-forward/gitconfig"
+        ok "added the cred-forward include to the global git config"
+    fi
+    last=$(git config --global --includes --get-all credential.https://github.com.helper | sed -n '$p')
+    [ "$last" = "!$helper" ] \
+        || die "another git credential helper for github.com overrides $helper"
+    ok "HTTPS git credentials for github.com use the forwarded login"
 }
 
 sshd_policy_is_configured() {

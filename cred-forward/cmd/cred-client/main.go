@@ -17,14 +17,14 @@ func main() {
 	}
 	path := flag.String("socket", defaultPath, "forwarded Unix socket path")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: cred-client [-socket PATH] SERVICE")
+		fmt.Fprintln(os.Stderr, "usage: cred-client [-socket PATH] SERVICE [ACCOUNT]")
 	}
 	flag.Parse()
-	if flag.NArg() != 1 {
+	if flag.NArg() < 1 || flag.NArg() > 2 {
 		flag.Usage()
 		os.Exit(2)
 	}
-	credential, err := client.Get(*path, flag.Arg(0), 0)
+	credential, err := client.Get(*path, flag.Arg(0), flag.Arg(1), 0)
 	if err != nil {
 		fatal(err)
 	}

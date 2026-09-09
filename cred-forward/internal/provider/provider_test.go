@@ -32,7 +32,7 @@ func TestRegistryRejectsMultilineCredential(t *testing.T) {
 	registry := Registry{"github": Env{Name: "TOKEN", Lookup: func(string) (string, bool) {
 		return "secret\nsecond-line", true
 	}}}
-	_, err := registry.Credential(context.Background(), "github")
+	_, err := registry.Credential(context.Background(), "github", "")
 	if !errors.Is(err, ErrInvalidValue) {
 		t.Fatalf("got %v, want ErrInvalidValue", err)
 	}
@@ -169,7 +169,7 @@ func TestDefaultRegistrySupportsLoginCredentialKinds(t *testing.T) {
 	for service, envName := range tests {
 		t.Run(service, func(t *testing.T) {
 			t.Setenv(envName, "credential")
-			got, err := NewDefaultRegistry().Credential(context.Background(), service)
+			got, err := NewDefaultRegistry().Credential(context.Background(), service, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -187,7 +187,7 @@ func TestDefaultRegistryDoesNotInheritStandardVariablesByDefault(t *testing.T) {
 	t.Setenv("CRED_AGENT_GITHUB", "")
 	t.Setenv("CRED_AGENT_GITHUB_COMMAND", "")
 	t.Setenv("GH_TOKEN", "ambient-credential")
-	_, err := NewDefaultRegistry().Credential(context.Background(), "github")
+	_, err := NewDefaultRegistry().Credential(context.Background(), "github", "")
 	if !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("got %v, want ErrNotConfigured", err)
 	}
@@ -200,7 +200,7 @@ func TestDefaultRegistryCanExplicitlyInheritStandardVariables(t *testing.T) {
 	t.Setenv("CRED_AGENT_GITHUB", "")
 	t.Setenv("CRED_AGENT_GITHUB_COMMAND", "")
 	t.Setenv("GH_TOKEN", "ambient-credential")
-	got, err := NewDefaultRegistry().Credential(context.Background(), "github")
+	got, err := NewDefaultRegistry().Credential(context.Background(), "github", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,12 +244,65 @@ func TestDefaultRegistryUsesLocalLoginCredentials(t *testing.T) {
 		"openaiaccount":  "account-id",
 	}
 	for service, want := range tests {
-		got, err := NewDefaultRegistry().Credential(context.Background(), service)
+		got, err := NewDefaultRegistry().Credential(context.Background(), service, "")
 		if err != nil {
 			t.Fatalf("%s: %v", service, err)
 		}
 		if got != want {
 			t.Fatalf("%s: got %q, want %q", service, got, want)
 		}
+	}
+}
+
+func TestDefaultRegistryServesNamedGitHubAccounts(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// The fake gh echoes the requested user so the test can see the arguments.
+	script := "#!/bin/sh\nif [ \"$3 $4 $5\" = '--hostname github.com --user' ]; then printf 'login-for-%s' \"$6\"; else printf active-login; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", bin)
+	t.Setenv("CRED_AGENT_GITHUB", "")
+	t.Setenv("CRED_AGENT_GITHUB_COMMAND", "")
+
+	registry := NewDefaultRegistry()
+	got, err := registry.Credential(context.Background(), "github", "")
+	if err != nil || got != "active-login" {
+		t.Fatalf("default login: got %q, %v", got, err)
+	}
+	got, err = registry.Credential(context.Background(), "github", "anchi-t2")
+	if err != nil || got != "login-for-anchi-t2" {
+		t.Fatalf("named login: got %q, %v", got, err)
+	}
+
+	t.Setenv("CRED_AGENT_GITHUB_TOKEN_ANCHI_T2", "env-login")
+	got, err = registry.Credential(context.Background(), "github", "anchi-t2")
+	if err != nil || got != "env-login" {
+		t.Fatalf("env override: got %q, %v", got, err)
+	}
+	t.Setenv("CRED_AGENT_GITHUB_COMMAND_ALICE", "printf command-login")
+	got, err = registry.Credential(context.Background(), "github", "alice")
+	if err != nil || got != "command-login" {
+		t.Fatalf("command override: got %q, %v", got, err)
+	}
+	// An account whose name ends in "command" must not read alice's helper.
+	got, err = registry.Credential(context.Background(), "github", "alice-command")
+	if err != nil || got != "login-for-alice-command" {
+		t.Fatalf("namespace collision: got %q, %v", got, err)
+	}
+	if got, err := registry.Credential(context.Background(), "github", "tigercosmos"); err != nil || got != "login-for-tigercosmos" {
+		t.Fatalf("other account: got %q, %v", got, err)
+	}
+
+	if _, err := registry.Credential(context.Background(), "anthropic", "anchi-t2"); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("account on a single-login service: got %v, want ErrNotConfigured", err)
+	}
+	if _, err := registry.Credential(context.Background(), "github", "bad name"); !errors.Is(err, ErrInvalidValue) {
+		t.Fatalf("invalid account: got %v, want ErrInvalidValue", err)
 	}
 }

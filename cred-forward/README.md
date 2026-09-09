@@ -78,6 +78,8 @@ CRED_FORWARD_ROLE=client make install
 
 The installer puts `cred-client` in `~/.local/bin`. It puts the wrappers in
 `~/.local/share/cred-forward/wrappers` and activates them in the shell profiles.
+It seeds `~/.config/cred-forward/github-accounts` once; see
+[Multiple GitHub accounts](#multiple-github-accounts).
 The user-level installation never runs `sudo`.
 
 The remote SSH daemon requires two settings for secure socket permissions and
@@ -110,6 +112,67 @@ codex
 The remote Codex credential store stays empty. Therefore,
 `codex login status` can report `Not logged in` while the wrapped Codex command
 uses the forwarded login.
+
+## Multiple GitHub accounts
+
+The local `gh` can hold several logins (`gh auth login` once per account). The
+agent serves each of them: `cred-client github` returns the active login and
+`cred-client github ACCOUNT` returns the login for one account through
+`gh auth token --user ACCOUNT`.
+
+The remote `gh` wrapper picks the account from the repository owner. The map
+lives in `~/.config/cred-forward/github-accounts` on the client:
+
+```text
+t2-auto anchi-t2
+tigercosmos tigercosmos
+* tigercosmos
+```
+
+Each line pairs an owner with a local `gh` login. Owners match
+case-insensitively and `*` is the fallback. The wrapper finds the owner in
+this order:
+
+1. `--repo`/`-R` or `GH_REPO`, as `OWNER/REPO`, `HOST/OWNER/REPO`, or a URL.
+2. The repository operand of a `gh repo` command, such as
+   `gh repo clone t2-auto/project`. Other positional arguments and option
+   values are never treated as repositories.
+3. The first github.com remote of the current directory, checking
+   `upstream`, `github`, and `origin` before the others.
+4. The `*` fallback.
+
+Only `github.com` owners are recognised. Without the map file, or when a
+line matches nothing, the wrapper uses the active local login as before.
+`CRED_FORWARD_GITHUB_ACCOUNT=login` forces one account for a single command
+and `CRED_FORWARD_GITHUB_ACCOUNTS=path` selects another map file.
+
+The installer seeds the map from `config/github-accounts` and never replaces
+it afterwards, not even with `FORCE=1`. Edit the file directly.
+
+### HTTPS git pushes
+
+The client installer also routes git's own HTTPS credentials for
+`github.com` through the same map. It installs
+`git-credential-cred-forward` next to the wrappers, writes a managed
+`~/.config/cred-forward/gitconfig`, and adds one `include.path` line to the
+global git config. The include sits after any helper that
+`gh auth setup-git` configured, so it takes precedence. The original global
+config is copied to `~/.local/share/cred-forward/.devenv-backup/` first.
+
+The helper answers `get` only. It reads the repository owner from the
+request path, so `git push` in a `t2-auto` repository uses `anchi-t2` and
+every other repository uses the fallback. `store` and `erase` do nothing;
+no credential is written to disk. Other hosts and plain HTTP fall through
+to the next helper.
+
+SSH remotes bypass credential helpers. Their account is decided by the SSH
+key that the remote machine offers.
+
+`CRED_AGENT_GITHUB_TOKEN_<NAME>` and `CRED_AGENT_GITHUB_COMMAND_<NAME>`
+override the local login for one account, where `<NAME>` is the account in
+upper case with hyphens replaced by underscores, for example
+`CRED_AGENT_GITHUB_COMMAND_ANCHI_T2`. Named logins always come from
+`github.com`.
 
 ## Custom credential providers
 
@@ -188,7 +251,9 @@ The installer backs up an existing SSH config before it adds the managed
 
 ## Wrapper behavior
 
-The `gh` wrapper sets `GH_TOKEN` for the real child process. The Claude wrapper
+The `gh` wrapper sets `GH_TOKEN` for the real child process. The git
+credential helper prints the login to git on stdout and stores nothing. The
+Claude wrapper
 prefers a subscription OAuth token. For an API key, it uses Claude's
 `apiKeyHelper` setting to call `cred-client` when Claude needs the key.
 
@@ -210,8 +275,9 @@ the existing Codex subscription login.
 ## Security model and limitations
 
 - The agent and client never log credential values.
-- Each connection logs its timestamp, service name, status, and local peer
-  process ID. An invalid request uses `service=-`.
+- Each connection logs its timestamp, service name, account, status, and
+  local peer process ID. An invalid request uses `service=-`; a request for
+  the default login uses `account=-`.
 - For a forwarded request, the peer process ID identifies the local SSH
   process. It does not identify the remote process that made the request.
 - The macOS agent writes audit records to
@@ -222,7 +288,8 @@ the existing Codex subscription login.
 - The local agent sets its socket mode to `0600`.
 - The setup uses `0700` socket directories. Remote administrators can also
   enforce a `0177` OpenSSH socket mask.
-- The protocol accepts six fixed service names and limits all frame sizes.
+- The protocol accepts six fixed service names, an optional GitHub login
+  name for the `github` service, and limits all frame sizes.
 - The remote wrappers do not write credential files. Codex and Claude API-key
   helpers fetch credentials only when the tool needs them.
 - The `gh` token and Claude subscription token exist in the target process
@@ -281,6 +348,9 @@ CRED/1 GET github\n
 CRED/1 OK 12\n
 token-value
 ```
+
+A request may name one account: `CRED/1 GET github anchi-t2\n`. The account
+uses the GitHub login syntax: up to 39 letters, digits, or hyphens.
 
 Errors contain a fixed code such as `unavailable`. Provider errors and command
 output never cross the socket.

@@ -23,6 +23,7 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 root=$(CDPATH='' cd -- "$script_dir/.." && pwd -P)
 bin_dir=${CRED_FORWARD_BIN_DIR:-"$HOME/.local/bin"}
 wrapper_dir=${CRED_FORWARD_WRAPPER_DIR:-"$HOME/.local/share/cred-forward/wrappers"}
+config_dir="$HOME/.config/cred-forward"
 state_dir="$HOME/.local/share/cred-forward/.install-state"
 force=${FORCE:-0}
 backup_dir=
@@ -79,6 +80,20 @@ install_artifact() {
     echo "installed: $destination"
 }
 
+# A configuration file is seeded once. The user owns it afterwards, so a
+# later install never replaces it, not even with FORCE=1.
+install_default_config() {
+    source_path=$1
+    destination=$2
+    if [ -e "$destination" ] || [ -L "$destination" ]; then
+        echo "already configured: $destination"
+        return
+    fi
+    ensure_dir "$(dirname "$destination")" 0700
+    install -m 0600 "$source_path" "$destination"
+    echo "installed: $destination"
+}
+
 artifact_checksum() {
     cksum <"$1" | awk '{ print $1 " " $2 }'
 }
@@ -117,6 +132,8 @@ if [ "$role" = client ] || [ "$role" = all ]; then
     install_artifact "$root/wrappers/gh" "$wrapper_dir/gh" 0755 wrapper-gh
     install_artifact "$root/wrappers/claude" "$wrapper_dir/claude" 0755 wrapper-claude
     install_artifact "$root/wrappers/codex" "$wrapper_dir/codex" 0755 wrapper-codex
+    install_artifact "$root/wrappers/git-credential-cred-forward" "$wrapper_dir/git-credential-cred-forward" 0755 wrapper-git-credential
+    install_default_config "$root/config/github-accounts" "$config_dir/github-accounts"
     echo "add this directory before the real CLI directory in PATH:"
     echo "  export PATH=\"$wrapper_dir:\$PATH\""
 fi

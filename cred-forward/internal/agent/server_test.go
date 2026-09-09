@@ -120,7 +120,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	for service, want := range map[string]string{
 		"github": "github-secret", "anthropic": "anthropic-secret", "openai": "openai-secret",
 	} {
-		got, err := client.Get(socket, service, 0)
+		got, err := client.Get(socket, service, "", 0)
 		if err != nil {
 			t.Fatalf("%s: %v", service, err)
 		}
@@ -160,7 +160,7 @@ func TestProviderErrorDoesNotLeakCredentialMaterial(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if err := protocol.WriteRequest(conn, "github"); err != nil {
+	if err := protocol.WriteRequest(conn, "github", ""); err != nil {
 		t.Fatal(err)
 	}
 	credential, code, err := protocol.ReadResponse(bufio.NewReader(conn))
@@ -193,15 +193,15 @@ func TestAuditLogRecordsRequestMetadataWithoutCredential(t *testing.T) {
 	}
 	go func() { _ = server.Serve(ctx, listener) }()
 
-	if _, err := client.Get(socket, "github", 0); err != nil {
+	if _, err := client.Get(socket, "github", "", 0); err != nil {
 		t.Fatal(err)
 	}
 	lines := []string{readAuditLine(t, audit, "github", "ok")}
-	if _, err := client.Get(socket, "anthropic", 0); err == nil {
+	if _, err := client.Get(socket, "anthropic", "", 0); err == nil {
 		t.Fatal("anthropic request unexpectedly succeeded")
 	}
 	lines = append(lines, readAuditLine(t, audit, "anthropic", "unavailable"))
-	if _, err := client.Get(socket, "openai", 0); err == nil {
+	if _, err := client.Get(socket, "openai", "", 0); err == nil {
 		t.Fatal("oversized credential request unexpectedly succeeded")
 	}
 	lines = append(lines, readAuditLine(t, audit, "openai", "unavailable"))
@@ -223,6 +223,10 @@ func readAuditLine(t *testing.T, audit auditWriter, service, status string) stri
 }
 
 func readAuditLineForPeer(t *testing.T, audit auditWriter, service, status, peer string) string {
+	return readAccountAuditLine(t, audit, service, "-", status, peer)
+}
+
+func readAccountAuditLine(t *testing.T, audit auditWriter, service, account, status, peer string) string {
 	t.Helper()
 	var line string
 	select {
@@ -232,14 +236,14 @@ func readAuditLineForPeer(t *testing.T, audit auditWriter, service, status, peer
 	}
 	line = strings.TrimSpace(line)
 	fields := strings.Fields(line)
-	if len(fields) != 6 || fields[0] != "cred-agent:" || fields[1] != "request" {
+	if len(fields) != 7 || fields[0] != "cred-agent:" || fields[1] != "request" {
 		t.Fatalf("audit log has an invalid production prefix or field count: %q", line)
 	}
 	timestamp := strings.TrimPrefix(fields[2], "timestamp=")
 	if _, err := time.Parse(time.RFC3339, timestamp); err != nil {
 		t.Fatalf("audit timestamp %q is invalid: %v", timestamp, err)
 	}
-	wantMetadata := fmt.Sprintf("service=%s status=%s peer_pid=%s", service, status, peer)
+	wantMetadata := fmt.Sprintf("service=%s account=%s status=%s peer_pid=%s", service, account, status, peer)
 	if strings.Join(fields[3:], " ") != wantMetadata {
 		t.Fatalf("audit metadata is %q, want %q", strings.Join(fields[3:], " "), wantMetadata)
 	}
@@ -282,7 +286,7 @@ func TestAuditLogRecordsInternalWriteFailure(t *testing.T) {
 	go func() {
 		serveDone <- server.Serve(context.Background(), &singleConnListener{conn: serverConn})
 	}()
-	if err := protocol.WriteRequest(clientConn, "github"); err != nil {
+	if err := protocol.WriteRequest(clientConn, "github", ""); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -326,7 +330,7 @@ func TestUnknownServiceReturnsFixedError(t *testing.T) {
 
 func TestUnavailableSocketFailsClearly(t *testing.T) {
 	socket := shortSocketPath(t, "missing.sock")
-	_, err := client.Get(socket, "github", 0)
+	_, err := client.Get(socket, "github", "", 0)
 	if err == nil || !strings.Contains(err.Error(), "forwarded credential socket is unavailable") {
 		t.Fatalf("got %v", err)
 	}
@@ -375,4 +379,73 @@ func TestListenRejectsLongSocketPathClearly(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "socket path is too long") {
 		t.Fatalf("got %v", err)
 	}
+}
+
+type accountSource struct {
+	logins map[string]string
+}
+
+func (s accountSource) Credential(context.Context) (string, error) {
+	return s.logins[""], nil
+}
+
+func (s accountSource) Account(name string) provider.Source {
+	value, ok := s.logins[name]
+	if !ok {
+		return staticSource{err: errors.New("no such account")}
+	}
+	return staticSource{value: value}
+}
+
+func TestServerServesAndAuditsNamedAccounts(t *testing.T) {
+	socket := shortSocketPath(t, "agent.sock")
+	listener, cleanup, err := agent.Listen(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	audit := make(auditWriter, 8)
+	server := agent.Server{
+		Providers: provider.Registry{
+			"github": accountSource{logins: map[string]string{
+				"": "active-secret", "anchi-t2": "work-secret", "tigercosmos": "personal-secret",
+			}},
+			"anthropic": staticSource{value: "anthropic-secret"},
+		},
+		AuditLog: agent.NewAuditLogger(audit),
+	}
+	go func() { _ = server.Serve(ctx, listener) }()
+	peer := fmt.Sprint(os.Getpid())
+
+	for account, want := range map[string]string{"": "active-secret", "anchi-t2": "work-secret", "tigercosmos": "personal-secret"} {
+		got, err := client.Get(socket, "github", account, 0)
+		if err != nil {
+			t.Fatalf("account %q: %v", account, err)
+		}
+		if got != want {
+			t.Fatalf("account %q: got %q, want %q", account, got, want)
+		}
+		logged := account
+		if logged == "" {
+			logged = "-"
+		}
+		line := readAccountAuditLine(t, audit, "github", logged, "ok", peer)
+		if strings.Contains(line, want) {
+			t.Fatalf("audit log contains credential value: %q", line)
+		}
+	}
+	if _, err := client.Get(socket, "github", "unknown", 0); err == nil {
+		t.Fatal("unknown account unexpectedly succeeded")
+	}
+	readAccountAuditLine(t, audit, "github", "unknown", "unavailable", peer)
+	if _, err := client.Get(socket, "anthropic", "anchi-t2", 0); err == nil {
+		t.Fatal("account on a single-login service unexpectedly succeeded")
+	}
+	readAccountAuditLine(t, audit, "anthropic", "anchi-t2", "unavailable", peer)
+	if code := rawRequest(t, socket, "CRED/1 GET github -bad\n"); code != "invalid-request" {
+		t.Fatalf("invalid account returned %q", code)
+	}
+	readAccountAuditLine(t, audit, "-", "-", "invalid-request", peer)
 }
