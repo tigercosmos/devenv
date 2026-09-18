@@ -108,6 +108,36 @@ install_bin() {
 }
 
 # ---------------------------------------------------------------------------
+# User service helpers (shared by cred-forward/install and scripts/devenv-doctor)
+# macOS and Linux only; cred-forward does not run on Windows.
+# ---------------------------------------------------------------------------
+
+# macos_service_pid LABEL — pid of a running LaunchAgent, or nothing.
+macos_service_pid() {
+    launchctl print "gui/$(id -u)/$1" 2>/dev/null \
+        | awk '$1 == "pid" && $2 == "=" { print $3; exit }'
+}
+
+# linux_service_pid UNIT — MainPID of an active systemd user unit; fails when
+# the unit is not running.
+linux_service_pid() {
+    local pid
+    pid=$(systemctl --user show --property MainPID --value "$1" 2>/dev/null) \
+        || return 1
+    case "$pid" in
+        ''|0|*[!0-9]*) return 1 ;;
+    esac
+    printf '%s\n' "$pid"
+}
+
+# cred_forward_links FILE — the "HOST REMOTE-SOCKET" lines of a cred-forward
+# links file, without comments and blank lines.
+cred_forward_links() {
+    [ -f "$1" ] || return 0
+    sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$1"
+}
+
+# ---------------------------------------------------------------------------
 # Shell profile helpers (shared by shell/install.sh and scripts/devenv-doctor)
 # ---------------------------------------------------------------------------
 

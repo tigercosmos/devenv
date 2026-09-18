@@ -7,10 +7,27 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/tigercosmos/devenv/cred-forward/internal/protocol"
 )
+
+// dial names the two states a finished SSH forward leaves behind: no socket
+// file, or a file that no session listens on any more.
+func dial(socketPath string, timeout time.Duration) (net.Conn, error) {
+	conn, err := net.DialTimeout("unix", socketPath, timeout)
+	if err == nil {
+		return conn, nil
+	}
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, fmt.Errorf("no forwarded credential socket at %s: is the cred-forward link connected?", socketPath)
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return nil, fmt.Errorf("stale credential socket at %s: no SSH session forwards it", socketPath)
+	}
+	return nil, fmt.Errorf("forwarded credential socket is unavailable at %s", socketPath)
+}
 
 // Get retrieves one credential. An empty account selects the default login.
 func Get(socketPath, service, account string, timeout time.Duration) (string, error) {
@@ -23,9 +40,9 @@ func Get(socketPath, service, account string, timeout time.Duration) (string, er
 	if timeout == 0 {
 		timeout = 20 * time.Second
 	}
-	conn, err := net.DialTimeout("unix", socketPath, timeout)
+	conn, err := dial(socketPath, timeout)
 	if err != nil {
-		return "", fmt.Errorf("forwarded credential socket is unavailable at %s", socketPath)
+		return "", err
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(timeout))

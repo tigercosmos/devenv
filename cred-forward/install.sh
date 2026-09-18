@@ -36,10 +36,13 @@ case "$(os)" in
 esac
 
 log "cred-forward ($role)"
-agent_signature_before=$(cksum "$LOCAL_BIN/cred-agent" "$LOCAL_BIN/cred-agent-launch" 2>/dev/null || true)
+# A service restarts when the installer replaced one of its binaries.
+signature() { (cd "$LOCAL_BIN" 2>/dev/null && cksum "$@" 2>/dev/null) || true; }
+agent_signature_before=$(signature cred-agent cred-agent-launch)
+link_signature_before=$(signature cred-forward-link)
 "$installer" "$installer_role"
-agent_signature_after=$(cksum "$LOCAL_BIN/cred-agent" "$LOCAL_BIN/cred-agent-launch" 2>/dev/null || true)
-[ "$agent_signature_before" != "$agent_signature_after" ] && CRED_FORWARD_AGENT_RESTART=1
+[ "$agent_signature_before" = "$(signature cred-agent cred-agent-launch)" ] || CRED_FORWARD_AGENT_RESTART=1
+[ "$link_signature_before" = "$(signature cred-forward-link)" ] || CRED_FORWARD_LINK_RESTART=1
 case "$role" in
     server)
         record_cred_forward_role "$role"

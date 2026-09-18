@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -301,6 +302,101 @@ func credentialCommandEnv() []string {
 	return filtered
 }
 
+// Cached serves one value from Source for TTL after a successful lookup.
+// Concurrent callers share one in-flight lookup, including its error, so a
+// burst of requests spawns the underlying command once. Errors are not kept
+// beyond the burst that observed them.
+type Cached struct {
+	Source Source
+	TTL    time.Duration
+	Now    func() time.Time
+
+	mu       sync.Mutex
+	value    string
+	expires  time.Time
+	inflight *lookup
+}
+
+type lookup struct {
+	done  chan struct{}
+	value string
+	err   error
+}
+
+// Credential implements Source.
+func (c *Cached) Credential(ctx context.Context) (string, error) {
+	now := c.Now
+	if now == nil {
+		now = time.Now
+	}
+	c.mu.Lock()
+	if c.value != "" && now().Before(c.expires) {
+		value := c.value
+		c.mu.Unlock()
+		return value, nil
+	}
+	if c.inflight != nil {
+		current := c.inflight
+		c.mu.Unlock()
+		<-current.done
+		return current.value, current.err
+	}
+	current := &lookup{done: make(chan struct{})}
+	c.inflight = current
+	c.mu.Unlock()
+
+	current.value, current.err = c.Source.Credential(ctx)
+	c.mu.Lock()
+	if current.err == nil {
+		c.value = current.value
+		c.expires = now().Add(c.TTL)
+	}
+	c.inflight = nil
+	c.mu.Unlock()
+	close(current.done)
+	return current.value, current.err
+}
+
+// ghLogins keeps one Cached gh lookup per account. Environment and command
+// overrides stay in front of the cache and take effect immediately.
+type ghLogins struct {
+	mu      sync.Mutex
+	sources map[string]*Cached
+}
+
+// Account returns a source for one gh login. The Cached entry is created on
+// first use, so accounts answered by an override never enter the map.
+func (g *ghLogins) Account(account string) Source {
+	return ghLogin{logins: g, account: account}
+}
+
+type ghLogin struct {
+	logins  *ghLogins
+	account string
+}
+
+func (l ghLogin) Credential(ctx context.Context) (string, error) {
+	return l.logins.cached(l.account).Credential(ctx)
+}
+
+func (g *ghLogins) cached(account string) *Cached {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.sources == nil {
+		g.sources = make(map[string]*Cached)
+	}
+	if source, found := g.sources[account]; found {
+		return source
+	}
+	args := []string{"auth", "token"}
+	if account != "" {
+		args = append(args, "--hostname", "github.com", "--user", account)
+	}
+	source := &Cached{Source: Executable{Name: "gh", Args: args}, TTL: GitHubCacheTTL}
+	g.sources[account] = source
+	return source
+}
+
 // Chain returns the first configured source.
 type Chain []Source
 
@@ -315,6 +411,11 @@ func (c Chain) Credential(ctx context.Context) (string, error) {
 	}
 	return "", ErrNotConfigured
 }
+
+// GitHubCacheTTL bounds how long a gh login is reused. Every request from a
+// remote git or gh process otherwise spawns gh, and parallel agents issue
+// those in bursts. A switched gh login takes effect within this interval.
+const GitHubCacheTTL = time.Minute
 
 // NewDefaultRegistry uses explicit cred-agent variables and command helpers.
 // Standard CLI variables are considered only with CRED_AGENT_INHERIT_ENV=1.
@@ -351,9 +452,10 @@ func NewDefaultRegistry() Registry {
 		registry["anthropicoauth"] = append(registry["anthropicoauth"].(Chain), Env{Name: "CLAUDE_CODE_OAUTH_TOKEN"})
 		registry["openai"] = append(registry["openai"].(Chain), Env{Name: "OPENAI_API_KEY"})
 	}
+	logins := &ghLogins{}
 	registry["github"] = Accounts{
-		Default:    append(registry["github"].(Chain), Executable{Name: "gh", Args: []string{"auth", "token"}}),
-		ForAccount: gitHubAccountSource,
+		Default:    append(registry["github"].(Chain), logins.Account("")),
+		ForAccount: func(account string) Source { return gitHubAccountSource(logins, account) },
 	}
 	registry["anthropicoauth"] = append(registry["anthropicoauth"].(Chain), TextFile{Path: "~/.local/share/cred-forward/secrets/claude-oauth"})
 	registry["openaichatgpt"] = append(registry["openaichatgpt"].(Chain), JSONFile{Path: "~/.codex/auth.json", Keys: []string{"tokens", "access_token"}})
@@ -367,12 +469,12 @@ func NewDefaultRegistry() Registry {
 // is the suffix of both names so that no account can address another one's
 // variable. The hostname is pinned so an ambient GH_HOST cannot substitute an
 // Enterprise login for a github.com request.
-func gitHubAccountSource(account string) Source {
+func gitHubAccountSource(logins *ghLogins, account string) Source {
 	name := strings.ToUpper(strings.ReplaceAll(account, "-", "_"))
 	return Chain{
 		Env{Name: "CRED_AGENT_GITHUB_TOKEN_" + name},
 		Command{EnvName: "CRED_AGENT_GITHUB_COMMAND_" + name},
-		Executable{Name: "gh", Args: []string{"auth", "token", "--hostname", "github.com", "--user", account}},
+		logins.Account(account),
 	}
 }
 

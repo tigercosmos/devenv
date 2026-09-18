@@ -40,7 +40,32 @@ if [ "$CRED_FORWARD_ROLE" = server ]; then
     esac
     if [ -f "$cred_service" ]; then ok "cred-agent user service -> $cred_service"
     else fail "cred-agent user service is missing (run: make cred-forward)"; rc=1; fi
-    if [ -f "$HOME/.ssh/config.d/cred-forward.conf" ]; then ok "SSH forwarding fragment is installed"
+    link_hosts=$(cred_forward_links "$HOME/.config/cred-forward/links" | awk '{ print $1 }')
+    if [ -n "$link_hosts" ]; then
+        if [ -x "$LOCAL_BIN/cred-forward-link" ]; then ok "cred-forward-link  ($LOCAL_BIN/cred-forward-link)"
+        else fail "cred-forward-link is missing (run: make cred-forward)"; rc=1; fi
+        case "$(os)" in
+            macos)
+                link_service="$HOME/Library/LaunchAgents/com.tigercosmos.cred-forward-link.plist"
+                link_pid=$(macos_service_pid com.tigercosmos.cred-forward-link)
+                link_log="$HOME/Library/Logs/cred-forward-link.log"
+                ;;
+            linux)
+                link_service="$HOME/.config/systemd/user/cred-forward-link.service"
+                link_pid=$(linux_service_pid cred-forward-link.service || true)
+                link_log="journalctl --user -u cred-forward-link"
+                ;;
+        esac
+        if [ -f "$link_service" ]; then ok "cred-forward-link user service -> $link_service"
+        else fail "cred-forward-link user service is missing (run: make cred-forward)"; rc=1; fi
+        if [ -n "$link_pid" ]; then ok "cred-forward-link is running (pid $link_pid)"
+        else fail "cred-forward-link is not running (see $link_log)"; rc=1; fi
+        # The supervisor stays alive while a host retries, so check each
+        # host's ssh child rather than the supervisor alone.
+        for host in $link_hosts; do
+            if pgrep -f "^ssh -N -n .* $host\$" >/dev/null 2>&1; then ok "credential link to $host is connected"
+            else fail "credential link to $host is down (see $link_log)"; rc=1; fi
+        done
     else warn "no SSH hosts use credential forwarding (set CRED_FORWARD_HOSTS and run: make cred-forward)"; fi
 elif [ "$CRED_FORWARD_ROLE" = client ]; then
     if [ -x "$LOCAL_BIN/cred-client" ]; then ok "cred-client  ($LOCAL_BIN/cred-client)"

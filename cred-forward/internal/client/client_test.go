@@ -49,3 +49,32 @@ func TestGetListsEverySupportedService(t *testing.T) {
 		}
 	}
 }
+
+func TestGetNamesMissingAndStaleSockets(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "cf-client-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, "agent.sock")
+
+	_, err = client.Get(path, "github", "", time.Second)
+	if err == nil || !strings.Contains(err.Error(), "no forwarded credential socket") {
+		t.Fatalf("missing socket: got %v", err)
+	}
+
+	// A listener that closes without unlinking leaves the file that a
+	// finished SSH session leaves behind.
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.SetUnlinkOnClose(false)
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Get(path, "github", "", time.Second)
+	if err == nil || !strings.Contains(err.Error(), "stale credential socket") {
+		t.Fatalf("stale socket: got %v", err)
+	}
+}

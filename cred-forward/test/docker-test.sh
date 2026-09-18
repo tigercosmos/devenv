@@ -3,7 +3,7 @@ set -euo pipefail
 
 go test ./...
 make build
-shellcheck -x wrappers/* install/*.sh
+shellcheck -x wrappers/* install/*.sh service/cred-forward-link
 
 test_root=$(mktemp -d)
 trap 'jobs -pr | xargs -r kill; rm -rf "$test_root"' EXIT
@@ -84,6 +84,20 @@ cat >"$server_home/.local/bin/systemctl" <<'EOF'
 #!/bin/sh
 set -eu
 case "$*" in
+    *'show --property MainPID --value cred-forward-link.service')
+        if [ -f "$HOME/cred-forward-link.pid" ]; then
+            cat "$HOME/cred-forward-link.pid"
+        else
+            printf '%s\n' 0
+        fi
+        ;;
+    *'is-active cred-forward-link.service')
+        [ -f "$HOME/cred-forward-link.pid" ]
+        ;;
+    *'restart cred-forward-link.service')
+        printf '%s\n' restart >>"$HOME/cred-forward-link-restarts"
+        printf '%s\n' 4242 >"$HOME/cred-forward-link.pid"
+        ;;
     *'show --property MainPID --value cred-agent.service')
         if [ -f "$HOME/cred-agent.pid" ] \
             && kill -0 "$(cat "$HOME/cred-agent.pid")" 2>/dev/null; then
@@ -109,13 +123,6 @@ EOF
 cat >"$server_home/.local/bin/ssh" <<'EOF'
 #!/bin/sh
 set -eu
-if [ "${1:-}" = -G ]; then
-    printf '%s\n' 'hostname fake.example' 'user remote'
-    if grep -Fq 'Include ~/.ssh/config.d/*.conf' "$HOME/.ssh/config" 2>/dev/null; then
-        printf 'remoteforward /home/remote/.cache/cred.sock %s/.cache/cred-agent.sock\n' "$HOME"
-    fi
-    exit 0
-fi
 [ "${1:-}" = -o ]
 [ "${2:-}" = ClearAllForwardings=yes ]
 [ "${3:-}" = -o ]
@@ -146,22 +153,25 @@ server_path="$server_home/.local/bin:/usr/local/go/bin:/usr/bin:/bin"
 HOME=$server_home PATH=$server_path DEVENV_HOME=/src CRED_FORWARD_ROLE=server \
     CRED_FORWARD_HOSTS=sim0 /src/cred-forward/install.sh >"$test_root/server-install.log"
 first_server_pid=$(cat "$server_home/cred-agent.pid")
-chmod 0644 "$server_home/.ssh/config.d/cred-forward.conf"
+chmod 0644 "$server_home/.config/cred-forward/links"
 HOME=$server_home PATH=$server_path DEVENV_HOME=/src CRED_FORWARD_ROLE=server \
     CRED_FORWARD_HOSTS=sim0 /src/cred-forward/install.sh >"$test_root/server-reinstall.log"
 [ "$(cat "$server_home/cred-agent.pid")" = "$first_server_pid" ]
 [ "$(wc -l <"$server_home/ssh-remote-probed")" = 1 ]
 [ "$(cat "$server_home/.local/share/cred-forward/role")" = server ]
 [ -S "$server_home/.cache/cred-agent.sock" ]
+# The forward lives in the links file that the link service reads, never in
+# an SSH config entry, so ordinary logins cannot bind the remote socket.
 [ -L "$server_home/.ssh/config" ]
-grep -Fqx 'Include ~/.ssh/config.d/*.conf' "$server_home/.ssh/config"
 grep -Fqx 'Host existing-host' "$server_home/.ssh/config"
-grep -Fq 'Host sim0' "$server_home/.ssh/config.d/cred-forward.conf"
-if grep -Fq 'ForwardAgent yes' "$server_home/.ssh/config.d/cred-forward.conf"; then
-    echo 'SSH-agent forwarding unexpectedly enabled by default' >&2
-    exit 1
-fi
-[ "$(stat -c '%a' "$server_home/.ssh/config.d/cred-forward.conf")" = 600 ]
+[ ! -e "$server_home/.ssh/config.d/cred-forward.conf" ]
+grep -Fxq 'sim0 /home/remote/.cache/cred.sock' "$server_home/.config/cred-forward/links"
+[ "$(stat -c '%a' "$server_home/.config/cred-forward/links")" = 600 ]
+[ -x "$server_home/.local/bin/cred-forward-link" ]
+[ -f "$server_home/.config/systemd/user/cred-forward-link.service" ]
+# The link service starts once and is left alone by an unchanged reinstall.
+[ "$(wc -l <"$server_home/cred-forward-link-restarts")" = 1 ]
+[ "$(HOME=$server_home "$server_home/.local/bin/cred-forward-link" hosts)" = sim0 ]
 HOME=$server_home CRED_FORWARD_SOCKET="$server_home/.cache/cred-agent.sock" \
     /src/cred-forward/dist/linux-amd64/cred-client github >"$test_root/server-github"
 [ "$(cat "$test_root/server-github")" = github-login ]
@@ -183,43 +193,12 @@ HOME=$server_home CRED_FORWARD_SOCKET="$server_home/.cache/cred-agent.sock" \
 [ "$(cat "$test_root/server-upgraded-github")" = github-login ]
 kill "$(cat "$server_home/cred-agent.pid")"
 
-# Exercise the remote cleanup script instead of short-circuiting it in the SSH
-# stub. The lsof stub accepts only the portable argument form and reports that
-# the planted Unix socket has no listener.
+# Exercise the remote preparation script instead of short-circuiting it in
+# the SSH stub: it creates the socket directory and removes a leftover file.
 cleanup_local_home=$test_root/cleanup-local-home
 cleanup_remote_home=$test_root/cleanup-remote-home
 cleanup_bin=$test_root/cleanup-bin
-mkdir -p "$cleanup_local_home" "$cleanup_remote_home/.cache" "$cleanup_bin"
-cat >"$test_root/make-stale-socket.go" <<'EOF'
-package main
-
-import (
-	"net"
-	"os"
-)
-
-func main() {
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: os.Args[1], Net: "unix"})
-	if err != nil {
-		panic(err)
-	}
-	listener.SetUnlinkOnClose(false)
-	if err := listener.Close(); err != nil {
-		panic(err)
-	}
-}
-EOF
-go run "$test_root/make-stale-socket.go" "$cleanup_remote_home/.cache/cred.sock"
-cat >"$cleanup_bin/lsof" <<'EOF'
-#!/bin/sh
-set -eu
-[ "$1" = -a ]
-[ "$2" = -U ]
-[ "$3" = -- ]
-[ "$4" = "$HOME/.cache/cred.sock" ]
-: >"$HOME/lsof-probed"
-exit 1
-EOF
+mkdir -p "$cleanup_local_home" "$cleanup_remote_home" "$cleanup_bin"
 cat >"$cleanup_bin/ssh" <<'EOF'
 #!/bin/sh
 set -eu
@@ -231,16 +210,16 @@ set -eu
 shift 5
 HOME="$CRED_FORWARD_TEST_REMOTE_HOME" "$@"
 EOF
-chmod 0755 "$cleanup_bin/lsof" "$cleanup_bin/ssh"
+chmod 0755 "$cleanup_bin/ssh"
 HOME=$cleanup_local_home PATH="$cleanup_bin:/usr/local/go/bin:/usr/bin:/bin" \
-    DEVENV_HOME=/src CRED_FORWARD_TEST_REMOTE_HOME=$cleanup_remote_home bash -c '
-        set -euo pipefail
-        . /src/lib/common.sh
-        . /src/cred-forward/install/_configure.sh
-        prepare_remote_socket sim0
-    ' >"$test_root/cleanup-remote-home.out"
+    CRED_FORWARD_TEST_REMOTE_HOME=$cleanup_remote_home \
+    bash service/cred-forward-link prepare sim0 >"$test_root/cleanup-remote-home.out"
 [ "$(cat "$test_root/cleanup-remote-home.out")" = "$cleanup_remote_home" ]
-[ -f "$cleanup_remote_home/lsof-probed" ]
+[ "$(stat -c '%a' "$cleanup_remote_home/.cache")" = 700 ]
+: >"$cleanup_remote_home/.cache/cred.sock"
+HOME=$cleanup_local_home PATH="$cleanup_bin:/usr/local/go/bin:/usr/bin:/bin" \
+    CRED_FORWARD_TEST_REMOTE_HOME=$cleanup_remote_home \
+    bash service/cred-forward-link prepare sim0 >/dev/null
 [ ! -e "$cleanup_remote_home/.cache/cred.sock" ]
 
 client_home=$test_root/client-home
@@ -709,7 +688,8 @@ if sudo -iu remote env CRED_FORWARD_SOCKET=/home/remote/.cache/cred.sock \
     echo "cred-client unexpectedly worked through sudo after SSH forwarding ended" >&2
     exit 1
 fi
-grep -Fq 'forwarded credential socket is unavailable' "$test_root/post-session.err"
+# OpenSSH leaves the socket file behind; the client names it as stale.
+grep -Fq 'stale credential socket' "$test_root/post-session.err"
 
 kill "$agent_pid" "$sshd_pid"
 wait "$agent_pid" || true

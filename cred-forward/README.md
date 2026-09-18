@@ -34,12 +34,22 @@ credential forwarding. The installer completes these tasks:
 - Uses the active `gh` login through `gh auth token`.
 - Uses the local Codex ChatGPT cache in `~/.codex/auth.json`.
 - Offers to store a Claude setup token in an owner-only local file.
-- Adds a managed OpenSSH fragment under `~/.ssh/config.d`.
+- Records each host and its remote socket path in
+  `~/.config/cred-forward/links`.
 - Creates a missing remote `~/.cache` directory with mode `0700`. It preserves
   the permissions of an existing directory.
+- Installs `cred-forward-link` and starts a second user service that keeps
+  one SSH connection per host. That connection owns the remote socket.
 
-The macOS service is a LaunchAgent. The Linux service is a systemd user unit.
-The default local socket is `~/.cache/cred-agent.sock`.
+The macOS services are LaunchAgents. The Linux services are systemd user
+units. The default local socket is `~/.cache/cred-agent.sock`.
+
+The link service authenticates without a prompt. Use an SSH key without a
+passphrase for the forwarded hosts, or load the key into the SSH agent that
+the user service manager exposes. On macOS, `launchd` provides
+`SSH_AUTH_SOCK` to LaunchAgents. The link log is
+`~/Library/Logs/cred-forward-link.log` on macOS and
+`journalctl --user -u cred-forward-link` on Linux.
 
 Use environment variables for an unattended server setup:
 
@@ -97,7 +107,8 @@ macOS, new connections load the policy without interrupting existing sessions.
 It preserves unrelated files at either path. Run the printed script path when
 the repository is not in `~/devenv`.
 
-Open a new SSH connection after both installations finish.
+The link service connects as soon as the server installation finishes. An
+open SSH session does not need to reconnect.
 
 ### 3. Verify the connection
 
@@ -211,14 +222,43 @@ The Codex access token expires. The local Codex CLI refreshes its credential
 store during normal use. Restart local Codex if the remote wrapper gets a 401
 response and the local token is stale.
 
+The agent reuses a `gh auth token` result for one minute per account.
+Parallel git and `gh` commands on the remote otherwise start one `gh` process
+per request. A switched `gh` login takes effect within that minute.
+Environment and command overrides are not cached.
+
 The provider package uses small `Source` implementations and a registry.
 Keychain, 1Password, and Secret Service providers can implement the same
-interface. The generated OpenSSH fragment has this form:
+interface.
 
-```sshconfig
-Host my-dev-host
-    RemoteForward /home/my-user/.cache/cred.sock /Users/local-user/.cache/cred-agent.sock
+### The link service
+
+OpenSSH binds the remote socket path per SSH session. With
+`StreamLocalBindUnlink yes`, each new session takes the path from the
+previous one, and OpenSSH leaves the socket file behind when a session ends.
+If every login carried the forward, the path would belong to the most recent
+login, including a short `ssh host command`, and would die when that login
+ended. Sessions that were still open would then fail immediately or wait for
+the client timeout on every credential request.
+
+`cred-forward-link` is therefore the only process that asks for the forward.
+It runs as a user service, reads `~/.config/cred-forward/links`, and opens
+one `ssh -N` connection per line with the `RemoteForward` option on its own
+command line, together with `ExitOnForwardFailure` and server-alive checks.
+It reconnects with backoff when a connection drops. `~/.ssh/config` never
+carries the forward, so interactive logins, VS Code Remote SSH, `scp`, and git
+over SSH use the host entry unchanged. The links file has this form:
+
 ```
+# Managed by devenv cred-forward.
+my-dev-host /home/my-user/.cache/cred.sock
+```
+
+Before the first connection, the installer runs a short remote command that
+creates `~/.cache` with mode `0700` and removes a leftover socket file. The
+link runs the same command again before a retry that follows a failed
+connection. Only the link binds that path, so the file is always safe to
+remove.
 
 Use an absolute path for the remote socket. OpenSSH expands `${HOME}` on the
 local side, so do not use it for the remote path.
@@ -227,27 +267,18 @@ The remote SSH server controls the mode and stale-file behavior for a remote
 Unix socket. The `0700` parent directory restricts access to the remote account.
 The administrator script sets `StreamLocalBindMask 0177` and
 `StreamLocalBindUnlink yes`. These settings provide reliable permissions and
-stale-socket replacement. Client-side options cannot enable them.
-
-The generated client fragment does not set `ExitOnForwardFailure`. Therefore,
-a stale remote socket cannot lock you out of SSH, Orca, or VS Code. During
-initial host configuration, the server removes an inactive socket when remote
-`ss` or `lsof` confirms that no process listens on it. The SSH daemon policy
-replaces the inactive path on later connections. See the OpenSSH
+stale-socket replacement. Client-side options cannot enable them. See the
+OpenSSH
 [`RemoteForward`](https://man.openbsd.org/ssh_config#RemoteForward) and remote
 [`StreamLocalBindMask`](https://man.openbsd.org/sshd_config#StreamLocalBindMask)
 documentation.
 
 The credential forward does not need SSH-agent forwarding. Set
 `CRED_FORWARD_SSH_AGENT=1` during server installation only when the remote
-workflow must also use the local SSH agent. The installer then adds
-`ForwardAgent yes` to its managed fragment.
-
-OpenSSH, VS Code Remote SSH, and clients that use this OpenSSH host entry use
-the same forward. No custom SSH command is required.
-
-The installer backs up an existing SSH config before it adds the managed
-`Include` line. OpenSSH, Orca, and VS Code Remote SSH use the same host entry.
+workflow must also use the local SSH agent. The installer then writes a
+managed fragment under `~/.ssh/config.d` with `ForwardAgent yes` for each
+host and backs up an existing SSH config before it adds the `Include` line.
+Without that setting, the installer removes its managed fragment.
 
 ## Wrapper behavior
 
@@ -295,7 +326,8 @@ the existing Codex subscription login.
 - The `gh` token and Claude subscription token exist in the target process
   environment. Child commands from those tools can inherit these values.
 - OpenSSH removes the remote listener when the SSH transport closes. A stale
-  socket file cannot reach the local agent.
+  socket file cannot reach the local agent; `cred-client` reports it as
+  stale.
 
 The forwarded socket is an active credential capability. Remote root can bypass
 file permissions and use the socket while the SSH connection exists. A process

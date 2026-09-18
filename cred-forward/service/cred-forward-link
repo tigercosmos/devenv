@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# cred-forward-link — keep one SSH connection per host that owns the remote
+# credential socket.
+#
+# OpenSSH binds the remote socket path per SSH session and leaves the file
+# behind when the session ends. If every login carried the RemoteForward, the
+# path would belong to whichever login came last, and a short `ssh host cmd`
+# or a suspended laptop session would leave every other session with a dead
+# or hanging socket. This supervisor is therefore the only process that asks
+# for the forward, on its own ssh command line; ~/.ssh/config never does.
+#
+#   cred-forward-link [run]         supervise one link per host in the links file
+#   cred-forward-link prepare HOST  create the remote socket directory, remove a
+#                                   leftover socket file, print the remote home
+#   cred-forward-link hosts         print the configured hosts
+set -euo pipefail
+
+# User services start with a minimal PATH. The caller's entries stay in front
+# so the installer can run this script with its own tools.
+PATH="$PATH:$HOME/.local/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH
+
+links="$HOME/.config/cred-forward/links"
+local_socket="$HOME/.cache/cred-agent.sock"
+retry_min=5
+retry_max=60
+# A connection that lasted this long counts as healthy, so the next retry
+# starts from the shortest delay again.
+healthy_seconds=60
+
+say() {
+    printf '%s cred-forward-link: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2
+}
+
+# "HOST REMOTE-SOCKET" lines, without comments and blank lines.
+configured_links() {
+    [ -f "$links" ] || return 0
+    sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$links"
+}
+
+# Only this supervisor binds the managed path, so a leftover file is always
+# safe to remove; the SSH daemon policy does the same on servers that have it.
+prepare_remote() {
+    ssh -o ClearAllForwardings=yes -o ConnectTimeout=5 "$1" sh -s <<'REMOTE_SCRIPT'
+        umask 077
+        mkdir -p "$HOME/.cache"
+        rm -f -- "$HOME/.cache/cred.sock"
+        printf "%s" "$HOME"
+REMOTE_SCRIPT
+}
+
+# Runs in a subshell per host. ssh and sleep run in the background under
+# wait so that a stop signal reaches this loop at once and takes the ssh
+# child down with it. The remote is prepared again only after a connection
+# that did not last, which is when a leftover file could block the bind.
+link_host() {
+    local host="$1" remote_socket="$2" delay=$retry_min started status child="" prepare=0
+    trap '[ -z "$child" ] || kill "$child" 2>/dev/null; exit 0' INT TERM
+    while :; do
+        if [ "$prepare" = 1 ] && ! prepare_remote "$host" >/dev/null 2>&1; then
+            say "$host: could not prepare the remote socket; retrying in ${delay}s"
+        else
+            started=$(date +%s)
+            say "$host: connecting"
+            status=0
+            ssh -N -n \
+                -o BatchMode=yes \
+                -o ExitOnForwardFailure=yes \
+                -o ServerAliveInterval=15 \
+                -o ServerAliveCountMax=3 \
+                -o ConnectTimeout=10 \
+                -o "RemoteForward=$remote_socket $local_socket" \
+                "$host" &
+            child=$!
+            wait "$child" || status=$?
+            child=""
+            if [ $(($(date +%s) - started)) -ge "$healthy_seconds" ]; then
+                delay=$retry_min
+            fi
+            say "$host: link closed (status $status); retrying in ${delay}s"
+        fi
+        prepare=1
+        sleep "$delay" &
+        child=$!
+        wait "$child" || true
+        child=""
+        delay=$((delay * 2))
+        [ "$delay" -le "$retry_max" ] || delay=$retry_max
+    done
+}
+
+run() {
+    local host remote_socket pids=()
+    if [ -z "$(configured_links)" ]; then
+        say "no hosts configured in $links"
+        exit 1
+    fi
+    # Stop every link when the service stops; each subshell forwards the
+    # signal to its ssh child.
+    trap 'kill "${pids[@]}" 2>/dev/null; wait; exit 0' INT TERM
+    while read -r host remote_socket; do
+        link_host "$host" "$remote_socket" &
+        pids+=("$!")
+    done < <(configured_links)
+    wait
+}
+
+case "${1:-run}" in
+    run) run ;;
+    prepare)
+        [ $# -eq 2 ] || { say "usage: cred-forward-link prepare HOST"; exit 2; }
+        prepare_remote "$2"
+        ;;
+    hosts) configured_links | awk '{ print $1 }' ;;
+    *) say "usage: cred-forward-link [run | prepare HOST | hosts]"; exit 2 ;;
+esac

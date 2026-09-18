@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -304,5 +305,132 @@ func TestDefaultRegistryServesNamedGitHubAccounts(t *testing.T) {
 	}
 	if _, err := registry.Credential(context.Background(), "github", "bad name"); !errors.Is(err, ErrInvalidValue) {
 		t.Fatalf("invalid account: got %v, want ErrInvalidValue", err)
+	}
+}
+
+// countingSource blocks every lookup on release so a burst is provably
+// concurrent, and counts how many lookups ran.
+type countingSource struct {
+	calls   atomic.Int64
+	release chan struct{}
+	err     error
+}
+
+func (c *countingSource) Credential(context.Context) (string, error) {
+	c.calls.Add(1)
+	<-c.release
+	return "credential", c.err
+}
+
+func TestCachedSharesOneLookupAcrossBurst(t *testing.T) {
+	source := &countingSource{release: make(chan struct{})}
+	now := time.Unix(1000, 0)
+	cached := &Cached{Source: source, TTL: time.Minute, Now: func() time.Time { return now }}
+
+	results := make(chan string, 8)
+	for i := 0; i < 8; i++ {
+		go func() {
+			got, err := cached.Credential(context.Background())
+			if err != nil {
+				t.Error(err)
+			}
+			results <- got
+		}()
+	}
+	// Every caller has either started the lookup or is waiting on it before
+	// the lookup is allowed to finish.
+	for source.calls.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	close(source.release)
+	for i := 0; i < 8; i++ {
+		if got := <-results; got != "credential" {
+			t.Fatalf("got %q", got)
+		}
+	}
+	if calls := source.calls.Load(); calls != 1 {
+		t.Fatalf("source ran %d times during the burst, want 1", calls)
+	}
+
+	now = now.Add(2 * time.Minute)
+	if _, err := cached.Credential(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if calls := source.calls.Load(); calls != 2 {
+		t.Fatalf("source ran %d times after expiry, want 2", calls)
+	}
+}
+
+func TestCachedSharesFailureAcrossBurstWithoutKeepingIt(t *testing.T) {
+	source := &countingSource{release: make(chan struct{}), err: errors.New("gh is broken")}
+	cached := &Cached{Source: source, TTL: time.Minute}
+	errs := make(chan error, 4)
+	for i := 0; i < 4; i++ {
+		go func() {
+			_, err := cached.Credential(context.Background())
+			errs <- err
+		}()
+	}
+	for source.calls.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	close(source.release)
+	for i := 0; i < 4; i++ {
+		if err := <-errs; err == nil || err.Error() != "gh is broken" {
+			t.Fatalf("got %v", err)
+		}
+	}
+	if calls := source.calls.Load(); calls != 1 {
+		t.Fatalf("a failing burst ran the source %d times, want 1", calls)
+	}
+	source.err = nil
+	if got, err := cached.Credential(context.Background()); err != nil || got != "credential" {
+		t.Fatalf("after failure: got %q, %v", got, err)
+	}
+}
+
+func TestCachedDoesNotCacheErrors(t *testing.T) {
+	failing := &Cached{Source: Env{Name: "CF_UNSET", Lookup: func(string) (string, bool) { return "", false }}, TTL: time.Minute}
+	for i := 0; i < 2; i++ {
+		if _, err := failing.Credential(context.Background()); !errors.Is(err, ErrNotConfigured) {
+			t.Fatalf("got %v", err)
+		}
+	}
+}
+
+func TestDefaultRegistryCachesGitHubLoginsPerAccount(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gh := filepath.Join(bin, "gh")
+	// PATH holds only the fake gh, so the script uses shell builtins alone.
+	script := "#!/bin/sh\nprintf x >>" + filepath.Join(home, "calls") + "\nprintf '%s' \"$*\"\n"
+	if err := os.WriteFile(gh, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", bin)
+	t.Setenv("CRED_AGENT_GITHUB", "")
+	t.Setenv("CRED_AGENT_GITHUB_COMMAND", "")
+	registry := NewDefaultRegistry()
+	for i := 0; i < 3; i++ {
+		for _, account := range []string{"", "anchi-t2"} {
+			got, err := registry.Credential(context.Background(), "github", account)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "auth token"
+			if account != "" {
+				want = "auth token --hostname github.com --user " + account
+			}
+			if got != want {
+				t.Fatalf("account %q: got %q, want %q", account, got, want)
+			}
+		}
+	}
+	if calls, _ := os.ReadFile(filepath.Join(home, "calls")); len(calls) != 2 {
+		t.Fatalf("gh ran %d times, want once per account", len(calls))
 	}
 }

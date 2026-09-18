@@ -122,6 +122,7 @@ if [ "$role" = agent ] || [ "$role" = all ]; then
     (cd "$root" && CGO_ENABLED=0 go build -trimpath -o "$build_dir/cred-agent" ./cmd/cred-agent)
     install_artifact "$build_dir/cred-agent" "$bin_dir/cred-agent" 0755 bin-cred-agent
     install_artifact "$root/service/cred-agent-launch" "$bin_dir/cred-agent-launch" 0755 bin-cred-agent-launch
+    install_artifact "$root/service/cred-forward-link" "$bin_dir/cred-forward-link" 0755 bin-cred-forward-link
 fi
 
 if [ "$role" = client ] || [ "$role" = all ]; then

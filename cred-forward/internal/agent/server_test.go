@@ -331,7 +331,7 @@ func TestUnknownServiceReturnsFixedError(t *testing.T) {
 func TestUnavailableSocketFailsClearly(t *testing.T) {
 	socket := shortSocketPath(t, "missing.sock")
 	_, err := client.Get(socket, "github", "", 0)
-	if err == nil || !strings.Contains(err.Error(), "forwarded credential socket is unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "no forwarded credential socket") {
 		t.Fatalf("got %v", err)
 	}
 }
