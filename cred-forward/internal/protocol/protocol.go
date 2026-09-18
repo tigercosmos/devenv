@@ -138,6 +138,22 @@ func ValidAccount(account string) bool {
 	return true
 }
 
+// ValidHost reports whether a name is an SSH host alias the agent accepts:
+// letters, digits, dots, underscores, and hyphens, without a leading hyphen.
+func ValidHost(host string) bool {
+	if host == "" || host[0] == '-' {
+		return false
+	}
+	for _, char := range host {
+		switch {
+		case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z', char >= '0' && char <= '9', char == '.', char == '_', char == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func readHeader(r *bufio.Reader) (string, error) {
 	line, err := r.ReadSlice('\n')
 	if err != nil {

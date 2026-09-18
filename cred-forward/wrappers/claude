@@ -15,18 +15,27 @@ unset script_path script_dir link_target
 # shellcheck source=wrappers/_common.sh
 . "$wrapper_dir/_common.sh"
 
-client=$(cred_forward_client)
 real=$(cred_forward_real claude "${CRED_FORWARD_REAL_CLAUDE:-}" "$wrapper_dir")
-unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN
-if credential=$("$client" anthropicoauth 2>/dev/null); then
-    CLAUDE_CODE_OAUTH_TOKEN=$credential
-    export CLAUDE_CODE_OAUTH_TOKEN
-else
-    "$client" anthropic >/dev/null || exit $?
+if cred_forward_disabled claude; then
+    exec "$real" "$@"
+fi
+client=$(cred_forward_client)
+status=0
+credential=$("$client" anthropicoauth 2>/dev/null) || status=$?
+[ "$status" != 3 ] || cred_forward_local_or_die claude "$status" "$real" "$@"
+if [ "$status" != 0 ]; then
+    # No subscription token: the API key is the second choice.
+    status=0
+    "$client" anthropic >/dev/null || status=$?
+    [ "$status" = 0 ] || cred_forward_local_or_die claude "$status" "$real" "$@"
+    unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN
     helper_word=$(cred_forward_shell_word "$client") || exit $?
     helper_json=$(cred_forward_json_string "$helper_word anthropic") || exit $?
     settings="{\"apiKeyHelper\":$helper_json}"
     exec "$real" --settings "$settings" "$@"
 fi
-unset credential
+unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+CLAUDE_CODE_OAUTH_TOKEN=$credential
+export CLAUDE_CODE_OAUTH_TOKEN
+unset credential status
 exec "$real" "$@"

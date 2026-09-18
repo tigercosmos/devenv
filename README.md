@@ -20,7 +20,9 @@ powershell -ExecutionPolicy Bypass -File install.ps1     # Windows
 ```
 
 Then open a new terminal. Tools that are already installed are left alone;
-`make update` (or `FORCE=1 make install`) upgrades everything.
+`devenv update` (or `FORCE=1 make install`) pulls this repository and
+upgrades everything. The `devenv` command manages the environment afterwards;
+see [The devenv command](#the-devenv-command).
 Codex is installed from its official native release and does not require npm.
 The copy in `~/.local/bin` takes precedence over npm or Homebrew copies.
 
@@ -82,15 +84,38 @@ is left alone; `FORCE=1 make skills` moves it to
 `codexmon` and `code-cortex` come from their own repositories and are
 installed by `make skills` next to these.
 
-## Scripts
+## The devenv command
 
-| Script | Purpose |
-|--------|---------|
-| `devenv-doctor` | Check every tool, skill, alias, and `PATH` entry; exit 1 on a miss |
-| `devenv-update` | Upgrade every tool and `cred-forward` (`devenv-update gh codex` upgrades only that subset) |
-| `devenv-sync-skills` | Link every skill in `~/.claude/skills` into the other agents' skill directories |
+`make shell` puts `scripts/` on `PATH`, so `devenv` is available in every new
+terminal. Each subcommand has a `.ps1` twin; on Windows only the first four
+work, and the credential-forwarding subcommands report that they are not
+supported. Visual Studio ships a `devenv.exe`, so on a machine with both, call
+`devenv.ps1` or put `$DEVENV_HOME\scripts` first on `PATH`.
 
-Each has a `.ps1` twin for Windows.
+| Command | Purpose |
+|---------|---------|
+| `devenv doctor` | Check every tool, skill, alias, and `PATH` entry; exit 1 on a miss |
+| `devenv update [TOOL...]` | Fast-forward this repository, then upgrade every tool and `cred-forward` (`devenv update gh codex` upgrades only that subset). A switched-off link service stays off |
+| `devenv sync-skills` | Link every skill in `~/.claude/skills` into the other agents' skill directories |
+| `devenv status` | Role, services, link hosts, client switches, and GitHub pins on one screen |
+| `devenv client on\|off [gh\|claude\|codex]...` | On a remote: use the forwarded logins (on) or the machine's own logins (off). Without a tool name, all three switch. Open shells pick the change up at once. Git over HTTPS follows `gh` |
+| `devenv client off [TOOL...] --once -- CMD...` | Run one command with local logins without changing the persistent switch |
+| `devenv server on\|off [HOST...]` | On the local machine: stop or start the credential links, for every host or the named ones. Off survives `make install` and `devenv update` |
+| `devenv server gh use ACCOUNT\|auto [--host HOST]` | Pin the GitHub login every remote (or one host) receives, whatever repository it works in. `auto` removes the pin. Takes effect on the next request |
+| `devenv server gh status` | Show the pins and the local `gh` logins |
+| `devenv server claude\|codex\|gh refresh [ACCOUNT]` | Log the local tool in again so remotes receive the new credential. Claude stores a fresh setup token (the old one is kept if the prompt is cancelled), Codex runs `codex login`, gh runs `gh auth refresh` for the active or named login. Interactive |
+| `devenv server claude\|codex status` | What the remotes currently receive: the date of the stored Claude setup token, or of the Codex login file, next to the local login |
+| `devenv gh check` | In a repository: compare the account the owner map wants with the login behind the HTTPS token, the login the SSH key authenticates as, and git's `user.name` and `user.email` |
+
+The old `devenv-doctor`, `devenv-update`, and `devenv-sync-skills` names still
+work and call the matching subcommand.
+
+When the server is off, or the link is down, a wrapped `gh`, `claude`, or
+`codex` on the remote does not silently use the remote's own login. In a
+terminal it asks once, with a 10 second timeout that defaults to no.
+`CRED_FORWARD_FALLBACK=1` answers yes for one command without a prompt. With
+no terminal and no variable, for example under an AI agent, the command fails
+and names `devenv client off`.
 
 ## Layout
 
@@ -101,9 +126,10 @@ cred-forward/       macOS/Linux credential server, remote client, and wrappers
 dependencies/       install.sh / install.ps1 — gh, codex, claude, cursor agent
 skills/             install.sh / install.ps1 — codexmon, code-cortex-mcp, skill sync
                     <name>/SKILL.md — the skills this repo maintains
-scripts/            utility scripts added to PATH
+scripts/            devenv (and devenv.ps1): doctor, update, status, client, server, gh
+                    devenv-* shims for the old script names
 shell/              devenv.sh / devenv.ps1 (sourced) and their installers
-lib/                helpers shared by the installers
+lib/                helpers shared by the installers; doctor.sh / doctor.ps1 hold the checks
 ```
 
 ## Environment variables
@@ -116,5 +142,7 @@ lib/                helpers shared by the installers
 | `CRED_FORWARD_CLAUDE_SETUP=skip` | Skip the server's Claude setup-token prompt |
 | `CRED_FORWARD_CLAUDE_SETUP=force` | Prompt again after Claude setup was declined |
 | `CRED_FORWARD_SSH_AGENT=1` | Also enable SSH-agent forwarding for managed hosts |
+| `CRED_FORWARD_FALLBACK=1` | On a remote: use the local login for one command when the agent is unreachable, without a prompt (`0` refuses without a prompt) |
+| `CRED_FORWARD_DISABLED` | On a remote: tools whose wrapper runs the real tool untouched (`gh claude codex` or `all`); set by `devenv client off --once` |
 | `DEVENV_PROFILE` | Override the profile file `make shell` edits |
 | `DEVENV_HOME` | Location of this repository (set by the profile block) |

@@ -1,0 +1,560 @@
+#!/usr/bin/env bash
+# devenv — manage the devenv environment and credential forwarding.
+#
+#   devenv doctor                      report what is installed and what is missing
+#   devenv update [TOOL...]            pull this repository, upgrade every tool, re-sync
+#   devenv sync-skills                 link every skill into the other agents
+#   devenv status                      role, services, hosts, switches, and pins
+#
+#   devenv client on|off [TOOL...]     forwarded (on) or local (off) logins; TOOL is
+#                                      gh, claude, or codex; git follows gh
+#   devenv client off [TOOL...] --once -- CMD...
+#                                      run one command with local logins
+#   devenv server on|off [HOST...]     start or stop the credential links
+#   devenv server gh use ACCOUNT|auto [--host HOST]
+#                                      pin the GitHub login remotes receive
+#   devenv server gh status            show the pins and the local gh logins
+#   devenv server claude|codex|gh refresh [ACCOUNT]
+#                                      log the local tool in again so remotes
+#                                      receive the new credential
+#   devenv server claude|codex status  what the remotes currently receive
+#   devenv gh check                    compare the wanted account with the
+#                                      token, the SSH key, and git's user
+set -euo pipefail
+DEVENV_CALLER_PATH=$PATH
+export DEVENV_CALLER_PATH
+# shellcheck disable=SC1091
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+usage() {
+    sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+# The cred-forward installer helpers assume macOS or Linux; load them only
+# for the commands that need them so `devenv update` still works everywhere.
+load_cred_forward() {
+    [ "$(os)" != windows ] || die "credential forwarding is not supported on Windows"
+    # shellcheck disable=SC1091
+    . "$DEVENV_HOME/cred-forward/install/_configure.sh"
+    # shellcheck disable=SC1091
+    . "$DEVENV_HOME/cred-forward/wrappers/_common.sh"
+}
+
+require_role() {
+    local role
+    role=$(current_role)
+    [ -n "$role" ] || die "cred-forward is not installed on this machine (run: make install)"
+    [ "$role" = "$1" ] || die "this machine is a cred-forward $role; 'devenv $1' runs on the $1"
+}
+
+# ---------------------------------------------------------------------------
+# update / doctor / sync-skills
+# ---------------------------------------------------------------------------
+
+cmd_update() {
+    log "devenv repository"
+    if git -C "$DEVENV_HOME" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        if [ -n "$(git -C "$DEVENV_HOME" status --porcelain --untracked-files=no)" ]; then
+            warn "uncommitted changes in $DEVENV_HOME; not pulling"
+        elif git -C "$DEVENV_HOME" pull --ff-only; then
+            ok "repository is up to date"
+        else
+            warn "git pull failed; continuing with the current checkout"
+        fi
+    else
+        warn "$DEVENV_HOME is not a git checkout; not pulling"
+    fi
+    export FORCE=1
+    bash "$DEVENV_HOME/dependencies/install.sh" "$@"
+    [ $# -eq 0 ] || return 0
+    bash "$DEVENV_HOME/skills/install.sh"
+    bash "$DEVENV_HOME/shell/install.sh"
+    # The cred-forward installer leaves a switched-off link service stopped.
+    [ "$(os)" = windows ] || bash "$DEVENV_HOME/cred-forward/install.sh"
+}
+
+cmd_doctor() {
+    # shellcheck disable=SC1091
+    . "$DEVENV_HOME/lib/doctor.sh"
+    devenv_doctor
+}
+
+# Make every skill under ~/.claude/skills available to the other agents by
+# symlinking it into their skill directories. An existing entry that is not
+# our link is reported and left alone; with FORCE=1 it is relinked (a real
+# directory is moved to <target>/.devenv-backup/ first, never deleted).
+# Dangling links left by removed skills are pruned.
+cmd_sync_skills() {
+    local targets target link changed src name dest bak
+    [ -d "$CLAUDE_SKILLS" ] || die "$CLAUDE_SKILLS does not exist"
+    targets=("$HOME/.codex/skills" "$HOME/.agents/skills" "$HOME/.cursor/skills")
+    for target in "${targets[@]}"; do
+        mkdir -p "$target"
+        for link in "$target"/*; do
+            [ -L "$link" ] && [ ! -e "$link" ] && { rm -f "$link"; warn "pruned dangling $link"; }
+        done
+        changed=0
+        for src in "$CLAUDE_SKILLS"/*/; do
+            src=${src%/}; name=$(basename "$src")
+            dest="$target/$name"
+            if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then continue; fi
+            # the same directory reached another way (e.g. ~/.claude/skills/x
+            # is itself a link into this target): nothing to do
+            [ -e "$dest" ] && [ "$(readlink -f "$src")" = "$(readlink -f "$dest")" ] && continue
+            if [ -L "$dest" ]; then
+                if [ "$FORCE" != 1 ]; then warn "$dest -> $(readlink "$dest") is not ours; FORCE=1 to relink"; continue; fi
+                rm -f "$dest"
+            elif [ -e "$dest" ]; then
+                if [ "$FORCE" != 1 ]; then warn "$dest is a local copy, not a link to $src; FORCE=1 to relink (the copy is kept in .devenv-backup)"; continue; fi
+                bak="$target/.devenv-backup/$name-$(date +%Y%m%d%H%M%S)"
+                mkdir -p "$(dirname "$bak")"; mv "$dest" "$bak"
+                warn "moved $dest to $bak"
+            fi
+            ln -s "$src" "$dest"
+            ok "linked $dest -> $src"; changed=$((changed+1))
+        done
+        if [ $changed -eq 0 ]; then ok "$target up to date"; fi
+    done
+}
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
+cmd_status() {
+    local role rev pid socket hosts
+    load_cred_forward
+    role=$(current_role)
+    rev=$(git -C "$DEVENV_HOME" log -1 --format='%h %s' 2>/dev/null || echo "not a git checkout")
+    log "devenv"
+    ok "repository $DEVENV_HOME ($rev)"
+    ok "cred-forward role: ${role:-not installed}"
+    case "$role" in
+        server)
+            log "server"
+            pid=$(current_agent_pid || true)
+            if [ -n "$pid" ]; then ok "cred-agent running (pid $pid)"; else fail "cred-agent is not running"; fi
+            pid=$(link_service_pid || true)
+            hosts=$(existing_cred_forward_hosts)
+            if [ -z "$hosts" ]; then warn "no SSH hosts use credential forwarding (set CRED_FORWARD_HOSTS and run: make cred-forward)"
+            elif link_service_is_off; then warn "credential links: off (devenv server on)"
+            elif [ -n "$pid" ]; then ok "cred-forward-link running (pid $pid)"
+            else fail "cred-forward-link is not running"; fi
+            print_link_hosts "$hosts" "$(link_off_hosts)"
+            print_gh_pins "gh pin: "
+            print_claude_secret
+            ;;
+        client)
+            log "client"
+            socket=${CRED_FORWARD_SOCKET:-$HOME/.cache/cred.sock}
+            if [ -S "$socket" ]; then ok "forwarded socket present: $socket"
+            else warn "forwarded socket missing: $socket (is the server link on?)"; fi
+            print_client_switches "$(client_disabled_tools)"
+            ;;
+    esac
+}
+
+# print_client_switches DISABLED — one line per tool, plus git which follows gh.
+print_client_switches() {
+    local tool
+    for tool in $CRED_FORWARD_TOOLS; do
+        if in_list "$tool" "$1"; then warn "$tool: local login (devenv client on $tool)"
+        else ok "$tool: forwarded login"; fi
+    done
+    if in_list gh "$1"; then warn "git (HTTPS): local gh login, chosen by repository owner"
+    else ok "git (HTTPS): forwarded login"; fi
+}
+
+# ---------------------------------------------------------------------------
+# client on|off
+# ---------------------------------------------------------------------------
+
+# toggle_list ACTION LIST ITEMS UNIVERSE — the members of UNIVERSE, in order,
+# that are in LIST after switching ITEMS off (added) or on (removed).
+toggle_list() {
+    local action="$1" list="$2" items="$3" item result=""
+    for item in $4; do
+        if [ "$action" = off ]; then
+            in_list "$item" "$list" || in_list "$item" "$items" || continue
+        else
+            in_list "$item" "$list" || continue
+            ! in_list "$item" "$items" || continue
+        fi
+        result="${result:+$result }$item"
+    done
+    printf '%s\n' "$result"
+}
+
+cmd_client() {
+    local action="${1:-status}" once=0 tools="" final
+    local -a command=()
+    load_cred_forward
+    require_role client
+    [ $# -eq 0 ] || shift
+    case "$action" in
+        status) cmd_status; return ;;
+        on|off) ;;
+        *) die "usage: devenv client on|off [gh|claude|codex]... [--once -- CMD...]" ;;
+    esac
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --once) once=1; shift ;;
+            --)
+                shift
+                command=("$@")
+                break
+                ;;
+            -*) die "unknown option: $1" ;;
+            *)
+                in_list "$1" "$CRED_FORWARD_TOOLS" || die "unknown tool: $1 (expected gh, claude, or codex)"
+                tools="${tools:+$tools }$1"
+                shift
+                ;;
+        esac
+    done
+    [ -n "$tools" ] || tools=$CRED_FORWARD_TOOLS
+
+    if [ "$once" = 1 ]; then
+        [ "$action" = off ] || die "--once switches forwarding off for one command only: devenv client off [TOOL...] --once -- CMD..."
+        [ ${#command[@]} -gt 0 ] || die "--once needs a command after --"
+        # The wrappers read CRED_FORWARD_DISABLED; the caller's PATH keeps the
+        # command's tools resolving the way they do in the shell.
+        CRED_FORWARD_DISABLED=$tools PATH=$DEVENV_CALLER_PATH exec "${command[@]}"
+    fi
+    [ ${#command[@]} -eq 0 ] || die "a command after -- requires --once"
+
+    final=$(toggle_list "$action" "$(client_disabled_tools)" "$tools" "$CRED_FORWARD_TOOLS")
+    write_state_file "$CRED_FORWARD_CLIENT_DISABLED" "$(printf '%s\n' "$final" | tr ' ' '\n')"
+    print_client_switches "$final"
+    if [ "$action" = off ]; then
+        ok "the change applies to every open shell at once; local tools must be logged in themselves"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# server on|off, server gh
+# ---------------------------------------------------------------------------
+
+cmd_server() {
+    local action="${1:-status}" configured host hosts="" off final
+    load_cred_forward
+    require_role server
+    [ $# -eq 0 ] || shift
+    case "$action" in
+        gh) cmd_server_gh "$@"; return ;;
+        claude) cmd_server_claude "$@"; return ;;
+        codex) cmd_server_codex "$@"; return ;;
+        status) cmd_status; return ;;
+        on|off) ;;
+        *) die "usage: devenv server on|off [HOST...] | devenv server gh use ACCOUNT|auto [--host HOST] | devenv server gh|claude|codex refresh|status" ;;
+    esac
+    configured=$(existing_cred_forward_hosts)
+    [ -n "$configured" ] || die "no SSH hosts are configured (set CRED_FORWARD_HOSTS and run: make cred-forward)"
+    for host in "$@"; do
+        in_list "$host" "$configured" || die "unknown host: $host (configured: $configured)"
+        hosts="${hosts:+$hosts }$host"
+    done
+    [ -n "$hosts" ] || hosts=$configured
+    # "*" stands for every host; expand it so a per-host change starts from
+    # the full list, and collapse back when nothing is left on.
+    off=$(link_off_hosts)
+    in_list '*' "$off" && off=$configured
+    final=$(toggle_list "$action" "$off" "$hosts" "$configured")
+    [ "$final" != "$configured" ] || final='*'
+    write_link_off "$final"
+
+    if link_service_is_off; then
+        restart_link_service
+        warn "credential forwarding is off for every host"
+        warn "remote wrappers fail until 'devenv server on'; run 'devenv client off' on a remote to use its own logins"
+    else
+        start_link_service
+        for host in $configured; do
+            if link_host_is_off "$host" "$final"; then warn "$host: off"; else ok "$host: on"; fi
+        done
+    fi
+}
+
+# write_gh_pin HOST ACCOUNT — set or, with an empty ACCOUNT, remove one pin.
+# Comment lines are kept; the file is rewritten atomically.
+write_gh_pin() {
+    local target="$1" account="$2" content
+    if [ -f "$CRED_FORWARD_GH_PIN" ]; then
+        content=$(awk -v target="$target" '
+            /^[[:space:]]*#/ || /^[[:space:]]*$/ { print; next }
+            tolower($1) == tolower(target) { next }
+            { print }
+        ' "$CRED_FORWARD_GH_PIN")
+    else
+        content="# $CRED_FORWARD_MANAGED_MARKER"
+    fi
+    [ -z "$account" ] || content="$content
+$target $account"
+    write_state_file "$CRED_FORWARD_GH_PIN" "$content"
+}
+
+cmd_server_gh() {
+    local action="${1:-status}" account="" target='*' hosts active
+    [ $# -eq 0 ] || shift
+    case "$action" in
+        refresh)
+            # gh serves each named login live (cached for a minute), so a
+            # re-authentication is all a remote needs. gh refreshes only the
+            # active login; switch to the requested one and back.
+            have gh || die "gh is not installed"
+            require_terminal "gh auth refresh"
+            active=$(gh api --hostname github.com user --jq .login 2>/dev/null || true)
+            account=${1:-$active}
+            [ -n "$account" ] || die "no active gh login; run: gh auth login"
+            if [ "$account" != "$active" ] && [ -n "$active" ]; then
+                # Ctrl-C during the browser flow must not leave the other
+                # account active.
+                trap 'gh auth switch --hostname github.com --user "$active" >/dev/null 2>&1 || true' EXIT INT TERM
+                gh auth switch --hostname github.com --user "$account"
+            fi
+            gh auth refresh --hostname github.com
+            ok "refreshed the gh login for $account; remotes receive it within a minute"
+            return
+            ;;
+        status)
+            log "GitHub login pins ($CRED_FORWARD_GH_PIN)"
+            print_gh_pins
+            if have gh; then
+                log "local gh logins"
+                gh auth status --hostname github.com 2>&1 | sed 's/^/  /' || true
+            fi
+            return
+            ;;
+        use) ;;
+        *) die "usage: devenv server gh use ACCOUNT|auto [--host HOST] | devenv server gh status" ;;
+    esac
+    [ $# -gt 0 ] || die "usage: devenv server gh use ACCOUNT|auto [--host HOST]"
+    account=$1; shift
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --host) [ $# -ge 2 ] || die "--host needs a host name"; target=$2; shift 2 ;;
+            --host=*) target=${1#--host=}; shift ;;
+            *) die "unknown option: $1" ;;
+        esac
+    done
+    if [ "$target" != '*' ]; then
+        hosts=$(existing_cred_forward_hosts)
+        in_list "$target" "$hosts" || die "unknown host: $target (configured: $hosts)"
+    fi
+    if [ "$account" = auto ]; then
+        write_gh_pin "$target" ""
+        if [ "$target" = '*' ]; then ok "no login pinned; remotes choose by repository owner"
+        else ok "no login pinned for $target"; fi
+    else
+        cred_forward_valid_login "$account" || die "not a GitHub login: $account"
+        if have gh && ! gh auth token --hostname github.com --user "$account" >/dev/null 2>&1; then
+            warn "the local gh holds no login for $account (gh auth login); the pin is set anyway"
+        fi
+        write_gh_pin "$target" "$account"
+        if [ "$target" = '*' ]; then ok "every remote now uses $account for gh and git"
+        else ok "$target now uses $account for gh and git"; fi
+    fi
+    ok "the agent reads the pin on each request; no restart is needed"
+}
+
+# require_terminal WHAT — the local logins are interactive.
+require_terminal() {
+    if ! [ -t 0 ] || ! [ -t 1 ]; then
+        die "$1 needs a terminal; run 'devenv server ... refresh' in an interactive shell"
+    fi
+}
+
+# print_claude_secret — when the stored Claude setup token was captured.
+print_claude_secret() {
+    if [ -s "$CRED_FORWARD_CLAUDE_SECRET" ]; then
+        ok "claude: remotes receive the setup token stored $(file_date "$CRED_FORWARD_CLAUDE_SECRET") (devenv server claude refresh)"
+    elif [ -f "$CRED_FORWARD_STATE_DIR/claude-setup-declined" ]; then
+        warn "claude: no setup token stored, setup was declined (devenv server claude refresh)"
+    else
+        warn "claude: no setup token stored (devenv server claude refresh)"
+    fi
+}
+
+# The forwarded Claude login is a setup token captured once; it does not
+# follow a later `claude login` on this machine. Refresh replaces it.
+cmd_server_claude() {
+    local action="${1:-status}" backup
+    case "$action" in
+        status)
+            log "claude"
+            print_claude_secret
+            if have claude; then
+                ok "local login: $(claude auth status 2>/dev/null | sed -n 's/.*"email": *"\([^"]*\)".*/\1/p' | head -1)"
+            fi
+            ;;
+        refresh)
+            have claude || die "claude is not installed"
+            require_terminal "claude setup-token"
+            # Keep the old token until the new one is stored, so a cancelled
+            # prompt does not leave the remotes without a login.
+            backup=""
+            if [ -s "$CRED_FORWARD_CLAUDE_SECRET" ]; then
+                backup=$(mktemp "$CRED_FORWARD_STATE_DIR/secrets/.claude-oauth.XXXXXX")
+                mv "$CRED_FORWARD_CLAUDE_SECRET" "$backup"
+                # Ctrl-C at the prompt must not leave the remotes without a token.
+                trap '[ -s "$CRED_FORWARD_CLAUDE_SECRET" ] || mv -f "$backup" "$CRED_FORWARD_CLAUDE_SECRET" 2>/dev/null' EXIT INT TERM
+            fi
+            CRED_FORWARD_CLAUDE_SETUP=force configure_claude_login
+            if [ -s "$CRED_FORWARD_CLAUDE_SECRET" ]; then
+                [ -z "$backup" ] || rm -f "$backup"
+                ok "remotes receive the new Claude token on their next request"
+            else
+                die "no new token stored; the previous one is kept"
+            fi
+            ;;
+        *) die "usage: devenv server claude refresh|status" ;;
+    esac
+}
+
+# The forwarded Codex login is read live from ~/.codex/auth.json, so a local
+# `codex login` is the refresh.
+cmd_server_codex() {
+    local action="${1:-status}" auth="$HOME/.codex/auth.json"
+    case "$action" in
+        status)
+            log "codex"
+            if [ -s "$auth" ]; then ok "remotes receive the ChatGPT login in $auth, written $(file_date "$auth")"
+            else warn "no $auth; remotes get the OpenAI API key provider only"; fi
+            if have codex; then codex login status 2>&1 | sed 's/^/  /'; fi
+            ;;
+        refresh)
+            have codex || die "codex is not installed"
+            require_terminal "codex login"
+            codex login
+            [ -s "$auth" ] || die "codex login did not write $auth; is Codex using file-based credential storage?"
+            ok "remotes receive the new Codex login on their next request"
+            ;;
+        *) die "usage: devenv server codex refresh|status" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# gh check
+# ---------------------------------------------------------------------------
+
+cmd_gh() {
+    local action="${1:-check}"
+    load_cred_forward
+    case "$action" in
+        check) cmd_gh_check ;;
+        *) die "usage: devenv gh check" ;;
+    esac
+}
+
+# forwarded_login_for ACCOUNT — the login behind the token the agent serves
+# when ACCOUNT is requested. Differs from ACCOUNT only under a server pin.
+forwarded_login_for() {
+    local token
+    [ "$(current_role)" = client ] && have cred-client || return 1
+    token=$(cred-client github "$1" 2>/dev/null) || return 1
+    GH_TOKEN=$token gh api --hostname github.com user --jq .login 2>/dev/null
+}
+
+# same_login A B — GitHub logins compare case-insensitively.
+same_login() { [ "$(tr '[:upper:]' '[:lower:]' <<<"$1")" = "$(tr '[:upper:]' '[:lower:]' <<<"$2")" ]; }
+
+cmd_gh_check() {
+    local map owner wanted remote_url transport filled token_login token_user key value
+    local ssh_out ssh_login git_name git_email api_name api_email rc=0
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "run 'devenv gh check' inside a git repository"
+    map=${CRED_FORWARD_GITHUB_ACCOUNTS:-"$HOME/.config/cred-forward/github-accounts"}
+    [ -f "$map" ] || map="$DEVENV_HOME/cred-forward/config/github-accounts"
+    # A push goes to origin's push URL, so check the credential that URL's
+    # owner selects, even when gh would prefer an upstream remote for reads.
+    remote_url=$(git remote get-url --push origin 2>/dev/null || true)
+    owner=$(cred_forward_github_owner "$remote_url" 2>/dev/null || cred_forward_github_repo_owner || true)
+    log "repository"
+    if [ -n "$owner" ]; then ok "github.com owner: $owner"; else warn "no github.com remote; using the fallback account"; fi
+    wanted=$(cred_forward_github_resolve_account "$map" "$owner" 2>/dev/null || true)
+    if [ -n "$wanted" ]; then ok "wanted account ($map): $wanted"
+    else warn "no account mapped in $map; the active login is used"; fi
+    case "$remote_url" in
+        https://*) transport=https ;;
+        git@*|ssh://*) transport=ssh ;;
+        *) transport=unknown ;;
+    esac
+    ok "origin push transport: $transport ($remote_url)"
+
+    log "HTTPS token"
+    # Ask git itself so the answer reflects the helper chain, the client
+    # switch, and a server pin exactly as a push would see them.
+    filled=$(printf 'protocol=https\nhost=github.com\n%s\n' "${owner:+path=$owner/check}" \
+        | PATH=$DEVENV_CALLER_PATH git credential fill 2>/dev/null || true)
+    token_user=""; token=""
+    while IFS='=' read -r key value; do
+        case "$key" in
+            username) token_user=$value ;;
+            password) token=$value ;;
+        esac
+    done <<<"$filled"
+    if [ -z "$token" ]; then
+        fail "git found no credential for github.com"; rc=1
+    else
+        IFS=$'\t' read -r token_login api_name api_email < <(
+            GH_TOKEN=$token gh api --hostname github.com user --jq '[.login, .name // "", .email // ""] | @tsv' 2>/dev/null || true)
+        if [ -z "$token_login" ]; then
+            fail "the token for user '$token_user' was rejected by GitHub"; rc=1
+        elif [ -n "$wanted" ] && ! same_login "$token_login" "$wanted"; then
+            if forwarded_login_for "$wanted" >/dev/null && same_login "$(forwarded_login_for "$wanted")" "$token_login"; then
+                warn "the server pins this host to $token_login, overriding the map's $wanted"
+            else
+                fail "the token belongs to $token_login, not $wanted"; rc=1
+            fi
+        else
+            ok "the token belongs to $token_login"
+        fi
+    fi
+    unset token
+
+    log "SSH key"
+    ssh_out=$(ssh -T -o BatchMode=yes -o ConnectTimeout=10 git@github.com 2>&1 || true)
+    ssh_login=$(sed -n 's/^Hi \([^!]*\)!.*/\1/p' <<<"$ssh_out" | head -1)
+    if [ -z "$ssh_login" ]; then
+        warn "no SSH key authenticates to github.com"
+        [ "$transport" != ssh ] || rc=1
+    elif [ -n "$wanted" ] && ! same_login "$ssh_login" "$wanted"; then
+        if [ "$transport" = ssh ]; then fail "the SSH key belongs to $ssh_login, not $wanted (origin uses SSH)"; rc=1
+        else warn "the SSH key belongs to $ssh_login, not $wanted (origin uses $transport)"; fi
+    else
+        ok "the SSH key belongs to $ssh_login"
+    fi
+
+    log "git author"
+    git_name=$(git config user.name 2>/dev/null || true)
+    git_email=$(git config user.email 2>/dev/null || true)
+    if [ -n "$git_name" ]; then ok "user.name: $git_name"; else warn "user.name is not set"; fi
+    if [ -n "$git_email" ]; then ok "user.email: $git_email"; else warn "user.email is not set"; fi
+    if [ -n "${token_login:-}" ]; then
+        if [ -n "$api_name" ] && [ "$api_name" != "$git_name" ]; then
+            warn "GitHub profile name for $token_login is '$api_name'"
+        fi
+        case "$git_email" in
+            "$api_email"|*"+$token_login@users.noreply.github.com"|"$token_login@users.noreply.github.com") ok "user.email matches $token_login" ;;
+            *) warn "user.email is not the GitHub address of $token_login (profile: ${api_email:-hidden}); commits may not be attributed to that account" ;;
+        esac
+    fi
+    echo
+    if [ "$rc" -eq 0 ]; then ok "gh check passed"; else fail "gh check found a mismatch"; fi
+    return "$rc"
+}
+
+# ---------------------------------------------------------------------------
+
+subcommand="${1:-help}"
+[ $# -eq 0 ] || shift
+case "$subcommand" in
+    doctor) cmd_doctor ;;
+    update) cmd_update "$@" ;;
+    sync-skills) cmd_sync_skills ;;
+    status) cmd_status ;;
+    client) cmd_client "$@" ;;
+    server) cmd_server "$@" ;;
+    gh) cmd_gh "$@" ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; die "unknown command: $subcommand" ;;
+esac

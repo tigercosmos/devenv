@@ -18,7 +18,7 @@ and the shell configuration into the user's home directory. See
 | `lib/common.sh`, `lib/common.ps1` | helpers shared by every installer: logging, `os()`, `have()`, `FORCE`, `PATH` setup |
 | `dependencies/` | installs `gh`, `codex`, `claude`, cursor `agent` |
 | `skills/` | the vendored agent skills plus the installer that links them into `~/.claude/skills` |
-| `scripts/` | `devenv-doctor`, `devenv-update`, `devenv-sync-skills` — the commands that end up on `PATH` |
+| `scripts/` | `devenv` (and `devenv.ps1`), the command that ends up on `PATH`: doctor, update, sync-skills, status, client, server, gh; `devenv-*` shims keep the old names working. The doctor checks live in `lib/doctor.sh` / `lib/doctor.ps1` |
 | `shell/` | `devenv.sh` / `devenv.ps1` and the installer that wires them into the login profile |
 
 ## Rules
@@ -48,7 +48,12 @@ There is no test suite. Verify a change by running it:
 make install          # full run
 make doctor           # report what is installed and what is missing
 FORCE=1 make install  # the upgrade path
+devenv status         # role, services, hosts, switches, and pins
 ```
+
+`cred-forward/` has its own suite: `make -C cred-forward test` runs the Go
+tests and `make -C cred-forward docker-test` runs the end-to-end script in a
+container, including the `devenv client` and `devenv server` flows.
 
 Run `make install` twice to prove idempotency. For a change to
 `dependencies/` or `shell/`, verify in a clean container

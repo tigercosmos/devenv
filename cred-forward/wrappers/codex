@@ -15,10 +15,16 @@ unset script_path script_dir link_target
 # shellcheck source=wrappers/_common.sh
 . "$wrapper_dir/_common.sh"
 
-client=$(cred_forward_client)
 real=$(cred_forward_real codex "${CRED_FORWARD_REAL_CODEX:-}" "$wrapper_dir")
+if cred_forward_disabled codex; then
+    exec "$real" "$@"
+fi
+client=$(cred_forward_client)
 
-if account_id=$("$client" openaiaccount 2>/dev/null); then
+status=0
+account_id=$("$client" openaiaccount 2>/dev/null) || status=$?
+[ "$status" != 3 ] || cred_forward_local_or_die codex "$status" "$real" "$@"
+if [ "$status" = 0 ]; then
     if "$client" openaichatgpt >/dev/null 2>&1; then
         CRED_FORWARD_OPENAI_ACCOUNT_ID=$account_id
         export CRED_FORWARD_OPENAI_ACCOUNT_ID
@@ -39,7 +45,9 @@ if account_id=$("$client" openaiaccount 2>/dev/null); then
     unset account_id
 fi
 
-"$client" openai >/dev/null || exit $?
+status=0
+"$client" openai >/dev/null || status=$?
+[ "$status" = 0 ] || cred_forward_local_or_die codex "$status" "$real" "$@"
 unset OPENAI_API_KEY
 client_toml=$(cred_forward_toml_string "$client") || exit $?
 

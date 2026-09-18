@@ -130,11 +130,109 @@ linux_service_pid() {
     printf '%s\n' "$pid"
 }
 
-# cred_forward_links FILE — the "HOST REMOTE-SOCKET" lines of a cred-forward
-# links file, without comments and blank lines.
-cred_forward_links() {
+# config_lines FILE — the lines of a cred-forward config or state file,
+# without comments and blank lines; nothing for a missing file.
+config_lines() {
     [ -f "$1" ] || return 0
     sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$1"
+}
+# cred_forward_links FILE — the "HOST REMOTE-SOCKET" lines of a links file.
+cred_forward_links() { config_lines "$1"; }
+
+# ---------------------------------------------------------------------------
+# cred-forward state (shared by cred-forward/install, scripts/devenv, and
+# lib/doctor.sh). The writers live in cred-forward/install/_configure.sh.
+# ---------------------------------------------------------------------------
+
+CRED_FORWARD_STATE_DIR="$HOME/.local/share/cred-forward"
+CRED_FORWARD_ROLE_FILE="$CRED_FORWARD_STATE_DIR/role"
+# shellcheck disable=SC2034  # read by the installer and the link service tests
+CRED_FORWARD_LINKS="$HOME/.config/cred-forward/links"
+CRED_FORWARD_LINK_OFF="$CRED_FORWARD_STATE_DIR/link-off"
+CRED_FORWARD_GH_PIN="$HOME/.config/cred-forward/gh-account"
+CRED_FORWARD_CLIENT_DISABLED="$CRED_FORWARD_STATE_DIR/disabled"
+CRED_FORWARD_LINK_LABEL=com.tigercosmos.cred-forward-link
+CRED_FORWARD_SSHD_STATE=/etc/cred-forward/sshd-policy
+CRED_FORWARD_TOOLS="gh claude codex"
+# shellcheck disable=SC2034  # read by the installer and scripts/devenv
+CRED_FORWARD_CLAUDE_SECRET="$CRED_FORWARD_STATE_DIR/secrets/claude-oauth"
+
+# file_date FILE — the modification date of FILE as YYYY-MM-DD HH:MM.
+file_date() {
+    case "$(os)" in
+        macos) stat -f '%Sm' -t '%Y-%m-%d %H:%M' "$1" ;;
+        *) date -r "$1" '+%Y-%m-%d %H:%M' ;;
+    esac
+}
+
+# current_role — server, client, or nothing when cred-forward is not installed.
+current_role() { sed -n '1p' "$CRED_FORWARD_ROLE_FILE" 2>/dev/null || true; }
+
+# cred_forward_host_socket HOST — the local socket the agent opens for one link.
+cred_forward_host_socket() { printf '%s/.cache/cred-agent-%s.sock\n' "$HOME" "$1"; }
+
+# link_off_hosts — the switched-off hosts as one space-separated line; "*"
+# means every host.
+link_off_hosts() { config_lines "$CRED_FORWARD_LINK_OFF" | paste -sd ' ' -; }
+
+# in_list WORD LIST — true when the space-separated LIST contains WORD.
+in_list() { case " $2 " in *" $1 "*) return 0 ;; esac; return 1; }
+
+# link_host_is_off HOST OFF — true when OFF (from link_off_hosts) covers HOST.
+link_host_is_off() { in_list '*' "$2" || in_list "$1" "$2"; }
+
+# link_connected HOST — true when the link service holds the SSH link to HOST.
+link_connected() { pgrep -f "^ssh -N -n .* $1\$" >/dev/null 2>&1; }
+
+# gh_pins — the "HOST ACCOUNT" pin lines, without comments.
+gh_pins() { config_lines "$CRED_FORWARD_GH_PIN"; }
+
+# client_disabled_tools — the tools whose forwarding is off, space-separated,
+# with the "all" shorthand expanded.
+client_disabled_tools() {
+    local list
+    list=$(config_lines "$CRED_FORWARD_CLIENT_DISABLED" | paste -sd ' ' -)
+    if in_list all "$list"; then printf '%s\n' "$CRED_FORWARD_TOOLS"; else printf '%s\n' "$list"; fi
+}
+
+link_service_pid() {
+    case "$(os)" in
+        macos) macos_service_pid "$CRED_FORWARD_LINK_LABEL" ;;
+        linux) linux_service_pid cred-forward-link.service ;;
+    esac
+}
+
+# print_gh_pins [PREFIX] — one ok line per pin, or one saying there is none.
+print_gh_pins() {
+    local prefix="${1:-}" pins host acct
+    pins=$(gh_pins)
+    if [ -z "$pins" ]; then
+        ok "${prefix}none; remotes choose the login by repository owner"
+        return
+    fi
+    while read -r host acct; do
+        if [ "$host" = '*' ]; then ok "${prefix}every host -> $acct"; else ok "${prefix}$host -> $acct"; fi
+    done <<<"$pins"
+}
+
+# print_link_hosts HOSTS OFF — one line per configured host: off, connected,
+# or not connected.
+print_link_hosts() {
+    local host
+    for host in $1; do
+        if link_host_is_off "$host" "$2"; then warn "$host: off (devenv server on $host)"
+        elif link_connected "$host"; then ok "$host: on, connected"
+        else warn "$host: on, not connected"; fi
+    done
+}
+
+# sshd_policy_is_configured — the client's SSH daemon has the socket policy.
+sshd_policy_is_configured() {
+    [ -r "$CRED_FORWARD_SSHD_STATE" ] \
+        && grep -Eq '^[[:space:]]*StreamLocalBindMask[[:space:]]+0177([[:space:]]|$)' \
+            "$CRED_FORWARD_SSHD_STATE" \
+        && grep -Eq '^[[:space:]]*StreamLocalBindUnlink[[:space:]]+yes([[:space:]]|$)' \
+            "$CRED_FORWARD_SSHD_STATE"
 }
 
 # ---------------------------------------------------------------------------
@@ -233,4 +331,12 @@ check_aliases() {
         fi
     done <<< "$REQUIRED_ALIASES"
     return $rc
+}
+
+# git_credentials_use_cred_forward — the last github.com helper in the global
+# git config is the cred-forward helper.
+git_credentials_use_cred_forward() {
+    have git || return 1
+    [ "$(git config --global --includes --get-all credential.https://github.com.helper 2>/dev/null | sed -n '$p')" \
+        = "!$HOME/.local/share/cred-forward/wrappers/git-credential-cred-forward" ]
 }

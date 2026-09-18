@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 # Role-specific setup used by the top-level devenv installer.
 
-CRED_FORWARD_STATE_DIR="$HOME/.local/share/cred-forward"
-CRED_FORWARD_ROLE_FILE="$CRED_FORWARD_STATE_DIR/role"
+# Paths and readers of the shared state live in lib/common.sh.
 CRED_FORWARD_AGENT_CONFIG="$HOME/.config/cred-forward/agent.env"
 CRED_FORWARD_GIT_CONFIG="$HOME/.config/cred-forward/gitconfig"
 CRED_FORWARD_LOCAL_SOCKET="$HOME/.cache/cred-agent.sock"
-CRED_FORWARD_LINKS="$HOME/.config/cred-forward/links"
 CRED_FORWARD_SSH_FRAGMENT="$HOME/.ssh/config.d/cred-forward.conf"
-CRED_FORWARD_SSHD_STATE=/etc/cred-forward/sshd-policy
 CRED_FORWARD_MANAGED_MARKER='Managed by devenv cred-forward.'
 CRED_FORWARD_LINK_SCRIPT="$DEVENV_HOME/cred-forward/service/cred-forward-link"
 CRED_FORWARD_AGENT_RESTART=0
@@ -62,15 +59,24 @@ install_managed_text() {
     ok "configured $destination"
 }
 
-record_cred_forward_role() {
-    local tmp
-    mkdir -p "$CRED_FORWARD_STATE_DIR"
-    chmod 0700 "$CRED_FORWARD_STATE_DIR"
-    tmp=$(mktemp)
-    printf '%s\n' "$1" >"$tmp"
-    install -m 0600 "$tmp" "$CRED_FORWARD_ROLE_FILE"
-    rm -f "$tmp"
+# write_state_file FILE CONTENT — replace an owner-only state file atomically;
+# empty CONTENT removes it.
+write_state_file() {
+    local file="$1" content="$2" dir tmp
+    if [ -z "$content" ]; then
+        rm -f "$file"
+        return
+    fi
+    dir=$(dirname "$file")
+    mkdir -p "$dir"
+    [ "$dir" != "$CRED_FORWARD_STATE_DIR" ] || chmod 0700 "$dir"
+    tmp=$(mktemp "$dir/.$(basename "$file").XXXXXX")
+    printf '%s\n' "$content" >"$tmp"
+    chmod 0600 "$tmp"
+    mv "$tmp" "$file"
 }
+
+record_cred_forward_role() { write_state_file "$CRED_FORWARD_ROLE_FILE" "$1"; }
 
 configure_agent_file() {
     local content
@@ -91,7 +97,7 @@ configure_agent_file() {
 
 configure_claude_login() {
     local secret_dir="$CRED_FORWARD_STATE_DIR/secrets"
-    local secret_file="$secret_dir/claude-oauth"
+    local secret_file="$CRED_FORWARD_CLAUDE_SECRET"
     local declined_file="$CRED_FORWARD_STATE_DIR/claude-setup-declined"
     local setup_mode="${CRED_FORWARD_CLAUDE_SETUP:-prompt}"
     local answer token tmp
@@ -119,12 +125,7 @@ configure_claude_login() {
     IFS= read -r answer || answer=n
     case "$answer" in
         n|N|no|NO)
-            mkdir -p "$CRED_FORWARD_STATE_DIR"
-            chmod 0700 "$CRED_FORWARD_STATE_DIR"
-            tmp=$(mktemp "$CRED_FORWARD_STATE_DIR/.claude-setup-declined.XXXXXX")
-            printf '%s\n' declined >"$tmp"
-            chmod 0600 "$tmp"
-            mv "$tmp" "$declined_file"
+            write_state_file "$declined_file" declined
             warn "Claude subscription forwarding skipped"
             return
             ;;
@@ -283,7 +284,8 @@ configure_macos_link_service() {
   <key>ProgramArguments</key>
   <array><string>$HOME/.local/bin/cred-forward-link</string></array>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <!-- The script exits 0 when every host is switched off; only a failure restarts it. -->
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ProcessType</key><string>Background</string>
   <key>StandardOutPath</key><string>/dev/null</string>
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/cred-forward-link.log</string>
@@ -302,7 +304,7 @@ After=network-online.target
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/cred-forward-link
-Restart=always
+Restart=on-failure
 RestartSec=5
 UMask=0077
 
@@ -312,10 +314,19 @@ WantedBy=default.target"
 }
 
 configure_link_service() {
-    local hosts
+    local hosts off active
     hosts=$(existing_cred_forward_hosts)
     if [ -z "$hosts" ]; then
         warn "no SSH hosts configured; the cred-forward link service is not started"
+        return
+    fi
+    off=$(link_off_hosts)
+    active=$(active_cred_forward_hosts "$hosts" "$off")
+    if [ -z "$active" ]; then
+        # A supervisor started under an older host list may still hold links;
+        # restarted, it reads the off list and exits cleanly.
+        [ -z "$(link_service_pid || true)" ] || restart_link_service
+        warn "credential forwarding is switched off; the link service stays stopped (devenv server on)"
         return
     fi
     case "$(os)" in
@@ -323,8 +334,52 @@ configure_link_service() {
         linux) configure_linux_link_service ;;
     esac
     if [ "$CRED_FORWARD_LINK_RESTART" = 1 ]; then
-        ok "cred-forward link service (re)started for: $hosts"
+        ok "cred-forward link service (re)started for: $active"
     fi
+    [ "$active" = "$hosts" ] || warn "switched off hosts: $off (devenv server on HOST)"
+}
+
+# active_cred_forward_hosts HOSTS OFF — HOSTS minus the ones OFF covers.
+active_cred_forward_hosts() {
+    local host result=""
+    for host in $1; do
+        link_host_is_off "$host" "$2" || result="${result:+$result }$host"
+    done
+    printf '%s\n' "$result"
+}
+
+# link_service_is_off — true when no configured host may be linked.
+link_service_is_off() {
+    local hosts
+    hosts=$(existing_cred_forward_hosts)
+    [ -n "$hosts" ] && [ -z "$(active_cred_forward_hosts "$hosts" "$(link_off_hosts)")" ]
+}
+
+# write_link_off HOSTS — record the switched-off hosts ("*" for all); an empty
+# list removes the file.
+write_link_off() { write_state_file "$CRED_FORWARD_LINK_OFF" "$(printf '%s\n' "$1" | tr ' ' '\n')"; }
+
+# restart_link_service — make the supervisor read the off file again. It
+# exits cleanly when every host is off, and the service manager restarts
+# only failures, so this is also how the links go down.
+restart_link_service() {
+    case "$(os)" in
+        macos)
+            if launchctl print "gui/$(id -u)/$CRED_FORWARD_LINK_LABEL" >/dev/null 2>&1; then
+                launchctl kickstart -k "gui/$(id -u)/$CRED_FORWARD_LINK_LABEL"
+            fi
+            ;;
+        linux)
+            have systemctl || die "systemctl is required to restart the link service"
+            systemctl --user restart cred-forward-link.service
+            ;;
+    esac
+}
+
+# start_link_service — install the service if needed and (re)start it.
+start_link_service() {
+    CRED_FORWARD_LINK_RESTART=1
+    configure_link_service
 }
 
 wait_for_agent_socket() {
@@ -352,7 +407,7 @@ wait_for_agent_socket() {
 # "# cred-forward-host:" comments; they seed the migration.
 existing_cred_forward_hosts() {
     if [ -f "$CRED_FORWARD_LINKS" ]; then
-        cred_forward_links "$CRED_FORWARD_LINKS" | awk '{ print $1 }' | paste -sd ' ' -
+        config_lines "$CRED_FORWARD_LINKS" | awk '{ print $1 }' | paste -sd ' ' -
     elif [ -f "$CRED_FORWARD_SSH_FRAGMENT" ]; then
         sed -n 's/^# cred-forward-host: //p' "$CRED_FORWARD_SSH_FRAGMENT" | paste -sd ' ' -
     fi
@@ -408,6 +463,10 @@ configure_ssh_hosts() {
     read -r -a host_list <<<"$hosts"
     for host in "${host_list[@]}"; do
         case "$host" in -*|*[!A-Za-z0-9._-]*|'') die "invalid SSH host alias: $host" ;; esac
+        # sun_path holds 104 bytes on macOS (108 on Linux); the agent refuses
+        # a longer per-host socket and would then serve nothing at all.
+        [ "$(printf '%s' "$(cred_forward_host_socket "$host")" | wc -c)" -le 103 ] \
+            || die "SSH host alias too long for a socket path: $host"
     done
     if [ -f "$CRED_FORWARD_LINKS" ] && [ "${host_list[*]}" = "$existing" ]; then
         links=$(cat "$CRED_FORWARD_LINKS")
@@ -423,7 +482,11 @@ $host $remote_home/.cache/cred.sock"
         done
     fi
     install_managed_text "$CRED_FORWARD_LINKS" 0600 links "$links"
-    [ "$CRED_FORWARD_LAST_WRITE" = 1 ] && CRED_FORWARD_LINK_RESTART=1
+    if [ "$CRED_FORWARD_LAST_WRITE" = 1 ]; then
+        CRED_FORWARD_LINK_RESTART=1
+        # The agent opens one local socket per host, so it restarts too.
+        CRED_FORWARD_AGENT_RESTART=1
+    fi
     configure_ssh_fragment "${host_list[@]}"
     ok "SSH credential forwarding configured for: ${host_list[*]}"
 }
@@ -480,14 +543,33 @@ Host $host
 configure_cred_forward_server() {
     configure_agent_file
     configure_claude_login
+    configure_gh_pin_file
+    # Hosts first: the agent reads the links file to open its per-host sockets.
+    configure_ssh_hosts
     CRED_FORWARD_OLD_AGENT_PID=$(current_agent_pid || true)
     case "$(os)" in
         macos) configure_macos_service ;;
         linux) configure_linux_service ;;
     esac
     wait_for_agent_socket
-    configure_ssh_hosts
     configure_link_service
+}
+
+# The pin file is user configuration like the client's account map: seeded
+# once with comments only, then owned by `devenv server gh use`.
+configure_gh_pin_file() {
+    local content
+    content="# $CRED_FORWARD_MANAGED_MARKER
+# Pins the GitHub login that forwarded gh and git requests use, whatever the
+# remote asked for. One \"HOST ACCOUNT\" pair per line; \"*\" covers every host.
+# The agent reads this file on every request. Edit it with:
+#   devenv server gh use ACCOUNT [--host HOST]
+#   devenv server gh use auto [--host HOST]"
+    if [ ! -e "$CRED_FORWARD_GH_PIN" ]; then
+        install_managed_text "$CRED_FORWARD_GH_PIN" 0600 gh-account "$content"
+    else
+        ok "already configured: $CRED_FORWARD_GH_PIN"
+    fi
 }
 
 verify_cred_forward_client_path() {
@@ -515,7 +597,7 @@ verify_cred_forward_client_path() {
 # helper reset overrides an earlier "gh auth setup-git" entry.
 configure_git_credentials() {
     local helper="$HOME/.local/share/cred-forward/wrappers/git-credential-cred-forward"
-    local include="$CRED_FORWARD_GIT_CONFIG" content backup_dir global_config last
+    local include="$CRED_FORWARD_GIT_CONFIG" content backup_dir global_config
     if ! have git; then
         warn "git is not installed; HTTPS git credentials are not forwarded"
         return
@@ -544,18 +626,9 @@ configure_git_credentials() {
         git config --global --add include.path "~/.config/cred-forward/gitconfig"
         ok "added the cred-forward include to the global git config"
     fi
-    last=$(git config --global --includes --get-all credential.https://github.com.helper | sed -n '$p')
-    [ "$last" = "!$helper" ] \
+    git_credentials_use_cred_forward \
         || die "another git credential helper for github.com overrides $helper"
     ok "HTTPS git credentials for github.com use the forwarded login"
-}
-
-sshd_policy_is_configured() {
-    [ -r "$CRED_FORWARD_SSHD_STATE" ] \
-        && grep -Eq '^[[:space:]]*StreamLocalBindMask[[:space:]]+0177([[:space:]]|$)' \
-            "$CRED_FORWARD_SSHD_STATE" \
-        && grep -Eq '^[[:space:]]*StreamLocalBindUnlink[[:space:]]+yes([[:space:]]|$)' \
-            "$CRED_FORWARD_SSHD_STATE"
 }
 
 request_ssh_server_setup() {

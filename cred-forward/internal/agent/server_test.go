@@ -236,14 +236,14 @@ func readAccountAuditLine(t *testing.T, audit auditWriter, service, account, sta
 	}
 	line = strings.TrimSpace(line)
 	fields := strings.Fields(line)
-	if len(fields) != 7 || fields[0] != "cred-agent:" || fields[1] != "request" {
+	if len(fields) != 9 || fields[0] != "cred-agent:" || fields[1] != "request" {
 		t.Fatalf("audit log has an invalid production prefix or field count: %q", line)
 	}
 	timestamp := strings.TrimPrefix(fields[2], "timestamp=")
 	if _, err := time.Parse(time.RFC3339, timestamp); err != nil {
 		t.Fatalf("audit timestamp %q is invalid: %v", timestamp, err)
 	}
-	wantMetadata := fmt.Sprintf("service=%s account=%s status=%s peer_pid=%s", service, account, status, peer)
+	wantMetadata := fmt.Sprintf("host=- service=%s account=%s pinned=- status=%s peer_pid=%s", service, account, status, peer)
 	if strings.Join(fields[3:], " ") != wantMetadata {
 		t.Fatalf("audit metadata is %q, want %q", strings.Join(fields[3:], " "), wantMetadata)
 	}

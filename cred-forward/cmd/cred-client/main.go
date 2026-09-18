@@ -26,7 +26,13 @@ func main() {
 	}
 	credential, err := client.Get(*path, flag.Arg(0), flag.Arg(1), 0)
 	if err != nil {
-		fatal(err)
+		// Exit 3 tells the wrappers that no agent answered, so they may
+		// offer the local login. Every other failure exits 1.
+		fmt.Fprintf(os.Stderr, "cred-client: %v\n", err)
+		if errors.Is(err, client.ErrUnreachable) {
+			os.Exit(3)
+		}
+		os.Exit(1)
 	}
 	if _, err := fmt.Fprint(os.Stdout, credential); err != nil {
 		fatal(errors.New("write credential"))

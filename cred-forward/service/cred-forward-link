@@ -13,6 +13,11 @@
 #   cred-forward-link prepare HOST  create the remote socket directory, remove a
 #                                   leftover socket file, print the remote home
 #   cred-forward-link hosts         print the configured hosts
+#   cred-forward-link active        print the hosts that are not switched off
+#
+# `devenv server off HOST` lists a host in the off file; `devenv server off`
+# writes "*" there and stops this service. Each host forwards its own local
+# socket so the agent knows which remote is asking.
 set -euo pipefail
 
 # User services start with a minimal PATH. The caller's entries stay in front
@@ -21,7 +26,7 @@ PATH="$PATH:$HOME/.local/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:/home/linu
 export PATH
 
 links="$HOME/.config/cred-forward/links"
-local_socket="$HOME/.cache/cred-agent.sock"
+off_file="$HOME/.local/share/cred-forward/link-off"
 retry_min=5
 retry_max=60
 # A connection that lasted this long counts as healthy, so the next retry
@@ -36,6 +41,18 @@ say() {
 configured_links() {
     [ -f "$links" ] || return 0
     sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$links"
+}
+
+# The configured links minus the hosts in the off file ("*" means all).
+active_links() {
+    local off
+    off=$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$off_file" 2>/dev/null | tr '\n' ' ' || true)
+    configured_links | while read -r host remote_socket; do
+        case " $off " in
+            *' * '*|*" $host "*) continue ;;
+        esac
+        printf '%s %s\n' "$host" "$remote_socket"
+    done
 }
 
 # Only this supervisor binds the managed path, so a leftover file is always
@@ -55,6 +72,7 @@ REMOTE_SCRIPT
 # that did not last, which is when a leftover file could block the bind.
 link_host() {
     local host="$1" remote_socket="$2" delay=$retry_min started status child="" prepare=0
+    local local_socket="$HOME/.cache/cred-agent-$host.sock"
     trap '[ -z "$child" ] || kill "$child" 2>/dev/null; exit 0' INT TERM
     while :; do
         if [ "$prepare" = 1 ] && ! prepare_remote "$host" >/dev/null 2>&1; then
@@ -90,8 +108,15 @@ link_host() {
 }
 
 run() {
-    local host remote_socket pids=()
-    if [ -z "$(configured_links)" ]; then
+    local host remote_socket active pids=()
+    active=$(active_links)
+    if [ -z "$active" ]; then
+        if [ -n "$(configured_links)" ]; then
+            # A clean exit: the service manager restarts only failures, so the
+            # links stay down until `devenv server on` starts the service.
+            say "every host is switched off (devenv server on)"
+            exit 0
+        fi
         say "no hosts configured in $links"
         exit 1
     fi
@@ -101,7 +126,7 @@ run() {
     while read -r host remote_socket; do
         link_host "$host" "$remote_socket" &
         pids+=("$!")
-    done < <(configured_links)
+    done <<<"$active"
     wait
 }
 
@@ -112,5 +137,6 @@ case "${1:-run}" in
         prepare_remote "$2"
         ;;
     hosts) configured_links | awk '{ print $1 }' ;;
-    *) say "usage: cred-forward-link [run | prepare HOST | hosts]"; exit 2 ;;
+    active) active_links | awk '{ print $1 }' ;;
+    *) say "usage: cred-forward-link [run | prepare HOST | hosts | active]"; exit 2 ;;
 esac

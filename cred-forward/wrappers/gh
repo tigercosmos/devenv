@@ -15,16 +15,17 @@ unset script_path script_dir link_target
 # shellcheck source=wrappers/_common.sh
 . "$wrapper_dir/_common.sh"
 
-client=$(cred_forward_client)
 real=$(cred_forward_real gh "${CRED_FORWARD_REAL_GH:-}" "$wrapper_dir")
+if cred_forward_disabled gh; then
+    exec "$real" "$@"
+fi
+client=$(cred_forward_client)
 account_map=${CRED_FORWARD_GITHUB_ACCOUNTS:-"$HOME/.config/cred-forward/github-accounts"}
 account=$(cred_forward_github_account "$account_map" "$@") || exit 1
-if [ -n "$account" ]; then
-    credential=$("$client" github "$account") || exit $?
-else
-    credential=$("$client" github) || exit $?
-fi
-unset account account_map
+status=0
+credential=$("$client" github ${account:+"$account"}) || status=$?
+[ "$status" = 0 ] || cred_forward_local_or_die gh "$status" "$real" "$@"
+unset account account_map status
 GH_TOKEN=$credential
 export GH_TOKEN
 unset credential

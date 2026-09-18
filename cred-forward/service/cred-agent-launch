@@ -23,4 +23,16 @@ if [ -f "$config_dir/agent.env" ]; then
 fi
 CRED_AGENT_SOCKET="$HOME/.cache/cred-agent.sock"
 export CRED_AGENT_SOCKET
-exec "$HOME/.local/bin/cred-agent"
+
+# Every link host gets its own local socket so the agent can tell which
+# remote asked and apply a per-host GitHub pin. The link service forwards
+# the matching socket; the installer restarts this service when the host
+# list changes.
+args=()
+if [ -f "$config_dir/links" ]; then
+    # cred-agent rejects a malformed host name itself.
+    while read -r host _; do
+        args+=(-host-socket "$host=$HOME/.cache/cred-agent-$host.sock")
+    done < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$config_dir/links")
+fi
+exec "$HOME/.local/bin/cred-agent" "${args[@]+"${args[@]}"}"

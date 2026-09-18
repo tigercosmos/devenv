@@ -31,6 +31,8 @@ type Server struct {
 	Providers provider.Registry
 	Timeout   time.Duration
 	AuditLog  *log.Logger
+	// GitHubPin overrides the account of every github request. Nil pins nothing.
+	GitHubPin PinLookup
 }
 
 // NewAuditLogger creates the logger used for credential request records.
@@ -39,7 +41,14 @@ func NewAuditLogger(writer io.Writer) *log.Logger {
 }
 
 // Serve accepts connections until the listener closes or the context ends.
+// Requests carry no host; use ServeHost for a socket that one link forwards.
 func (s Server) Serve(ctx context.Context, listener net.Listener) error {
+	return s.ServeHost(ctx, listener, "")
+}
+
+// ServeHost is Serve for the socket that the link to HOST forwards. The host
+// selects the GitHub pin and appears in the audit log.
+func (s Server) ServeHost(ctx context.Context, listener net.Listener, host string) error {
 	var connections sync.WaitGroup
 	defer connections.Wait()
 	done := make(chan struct{})
@@ -82,7 +91,7 @@ func (s Server) Serve(ctx context.Context, listener net.Listener) error {
 		connections.Add(1)
 		go func() {
 			defer connections.Done()
-			s.handle(ctx, conn)
+			s.handle(ctx, conn, host)
 		}()
 	}
 }
@@ -92,7 +101,7 @@ func retryableAcceptError(err error) bool {
 	return errors.As(err, &netErr) && netErr.Temporary()
 }
 
-func (s Server) handle(ctx context.Context, conn net.Conn) {
+func (s Server) handle(ctx context.Context, conn net.Conn, host string) {
 	defer conn.Close()
 	peer := "unknown"
 	if pid, err := peerPID(conn); err == nil {
@@ -100,8 +109,9 @@ func (s Server) handle(ctx context.Context, conn net.Conn) {
 	}
 	service := "-"
 	account := "-"
+	pinned := "-"
 	status := "invalid-request"
-	defer func() { s.logRequest(service, account, status, peer) }()
+	defer func() { s.logRequest(host, service, account, pinned, status, peer) }()
 	timeout := s.Timeout
 	if timeout == 0 {
 		timeout = 15 * time.Second
@@ -122,6 +132,18 @@ func (s Server) handle(ctx context.Context, conn net.Conn) {
 		_ = protocol.WriteError(conn, "unknown-service")
 		return
 	}
+	if service == "github" && s.GitHubPin != nil {
+		pin, found, err := s.GitHubPin.Pin(host)
+		if err != nil {
+			status = "unavailable"
+			_ = protocol.WriteError(conn, "unavailable")
+			return
+		}
+		if found {
+			requestedAccount = pin
+			pinned = pin
+		}
+	}
 	credential, err := s.Providers.Credential(ctx, service, requestedAccount)
 	if err != nil {
 		status = "unavailable"
@@ -136,13 +158,16 @@ func (s Server) handle(ctx context.Context, conn net.Conn) {
 	status = "ok"
 }
 
-func (s Server) logRequest(service, account, status, peer string) {
+func (s Server) logRequest(host, service, account, pinned, status, peer string) {
 	if s.AuditLog == nil {
 		return
 	}
+	if host == "" {
+		host = "-"
+	}
 	s.AuditLog.Printf(
-		"timestamp=%s service=%s account=%s status=%s peer_pid=%s",
-		time.Now().UTC().Format(time.RFC3339), service, account, status, peer,
+		"timestamp=%s host=%s service=%s account=%s pinned=%s status=%s peer_pid=%s",
+		time.Now().UTC().Format(time.RFC3339), host, service, account, pinned, status, peer,
 	)
 }
 

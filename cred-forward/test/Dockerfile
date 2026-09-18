@@ -9,5 +9,7 @@ RUN apt-get update \
 COPY cred-forward /src/cred-forward
 COPY lib /src/lib
 COPY shell /src/shell
+COPY scripts /src/scripts
+COPY Makefile /src/Makefile
 WORKDIR /src/cred-forward
 CMD ["bash", "test/docker-test.sh"]

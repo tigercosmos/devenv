@@ -1,12 +1,3 @@
 #!/usr/bin/env bash
-# devenv-update — upgrade every tool devenv manages, update cred-forward,
-# then re-sync skills and re-check the shell profile.
-set -euo pipefail
-. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/common.sh"
-
-export FORCE=1
-bash "$DEVENV_HOME/dependencies/install.sh" "$@"
-[ $# -eq 0 ] && bash "$DEVENV_HOME/skills/install.sh"
-[ $# -eq 0 ] && bash "$DEVENV_HOME/shell/install.sh"
-[ $# -eq 0 ] && bash "$DEVENV_HOME/cred-forward/install.sh"
-exit 0
+# devenv-update — kept for existing habits; the command is `devenv update`.
+exec "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/devenv" update "$@"

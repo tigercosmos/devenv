@@ -35,7 +35,8 @@ credential forwarding. The installer completes these tasks:
 - Uses the local Codex ChatGPT cache in `~/.codex/auth.json`.
 - Offers to store a Claude setup token in an owner-only local file.
 - Records each host and its remote socket path in
-  `~/.config/cred-forward/links`.
+  `~/.config/cred-forward/links`. The agent opens one local socket per host,
+  `~/.cache/cred-agent-HOST.sock`, so it knows which remote is asking.
 - Creates a missing remote `~/.cache` directory with mode `0700`. It preserves
   the permissions of an existing directory.
 - Installs `cred-forward-link` and starts a second user service that keeps
@@ -124,6 +125,73 @@ The remote Codex credential store stays empty. Therefore,
 `codex login status` can report `Not logged in` while the wrapped Codex command
 uses the forwarded login.
 
+## Switching forwarding on and off
+
+`devenv server off` takes every link down, so every remote loses its
+socket; `devenv server off sim4` drops one host and keeps the others linked.
+The off state lives in `~/.local/share/cred-forward/link-off` (a host list,
+or `*` once every host is off) and survives `make install` and
+`devenv update`. Each change restarts the link service, which reads the file
+and either links the remaining hosts or exits cleanly; the service manager
+restarts it only after a failure. `devenv server on [HOST...]` reverses it.
+`devenv status` shows each host as on or off, and whether its link is
+connected.
+
+On a remote, `devenv client off` makes the wrappers run the real `gh`,
+`claude`, and `codex` untouched, with the remote's own logins. The switch is
+a list of tools in `~/.local/share/cred-forward/disabled`, read on every
+call, so open shells change at once. `devenv client off gh` switches one
+tool; `devenv client on` switches everything back. For a single command:
+
+```sh
+devenv client off --once -- gh pr list
+devenv client off gh --once -- git push
+```
+
+Git over HTTPS follows the `gh` switch. With `gh` off, the helper still maps
+the repository owner to an account, then asks the remote's own
+`gh auth token --user ACCOUNT` for it. If the remote holds no login for that
+account, the push fails and the message names the account; it never pushes
+as whoever happens to be logged in. `devenv gh check`, run inside a
+repository, reports the account the map wants, the login behind the token
+git would use, the login the SSH key authenticates as, and git's
+`user.name` and `user.email`.
+
+When the agent is unreachable (the server is off, or the link is down), a
+wrapper does not fall back on its own. In a terminal it asks once whether to
+use the local login for this command, with a 10 second timeout that defaults
+to no. `CRED_FORWARD_FALLBACK=1` answers yes for one command and
+`CRED_FORWARD_FALLBACK=0` answers no, both without a prompt. With no terminal
+and no variable, the command fails with exit status 3 and names
+`devenv client off`. An agent that answers with an error, for example for an
+unknown account, never triggers the fallback.
+
+## Refreshing the forwarded logins
+
+The three logins age differently. Codex is read live from `~/.codex/auth.json`
+and gh is asked live for each login, so a local `codex login` or
+`gh auth refresh` is enough. Claude is different: the agent serves the setup
+token captured once during `make install`, and a later `claude login` on the
+local machine does not change it. `devenv server claude status` shows when
+that token was stored, and `devenv server claude refresh` runs
+`claude setup-token` again and replaces it; a cancelled prompt keeps the old
+token. `devenv server codex refresh` and `devenv server gh refresh [ACCOUNT]`
+do the same for the other two. All three need an interactive terminal.
+
+## Pinning the GitHub login from the server
+
+`devenv server gh use anchi-t2` makes every remote receive the `anchi-t2`
+login for `gh` and HTTPS git, whatever repository it works in and whatever
+its owner map says. `--host sim4` pins one host; a host pin beats the global
+one. `devenv server gh use auto [--host HOST]` removes a pin, and
+`devenv server gh status` lists them next to the local `gh` logins.
+
+The pins live in `~/.config/cred-forward/gh-account`, one `HOST ACCOUNT`
+pair per line with `*` for every host. The agent reads the file on each
+request, so no restart is needed. A malformed file makes GitHub requests
+fail rather than serve an unexpected login. The audit log records the host
+and the pinned account of every request.
+
 ## Multiple GitHub accounts
 
 The local `gh` can hold several logins (`gh auth login` once per account). The
@@ -136,6 +204,7 @@ lives in `~/.config/cred-forward/github-accounts` on the client:
 
 ```text
 t2-auto anchi-t2
+solvcon tigercosmos
 tigercosmos tigercosmos
 * tigercosmos
 ```

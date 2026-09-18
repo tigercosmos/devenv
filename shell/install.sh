@@ -45,7 +45,7 @@ if [ -n "$LOGIN_PROFILE" ] && [ "$LOGIN_PROFILE" != "$PROFILE" ]; then
     install_profile_block "$LOGIN_PROFILE"
 fi
 
-chmod +x "$DEVENV_HOME"/scripts/devenv-* 2>/dev/null || true
+chmod +x "$DEVENV_HOME"/scripts/devenv "$DEVENV_HOME"/scripts/devenv-* 2>/dev/null || true
 
 log "verify aliases (sourcing $PROFILE in a clean $(profile_shell "$PROFILE"))"
 check_aliases "$PROFILE" || die "alias check failed — see above"

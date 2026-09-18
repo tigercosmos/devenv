@@ -4,9 +4,11 @@ set -euo pipefail
 go test ./...
 make build
 shellcheck -x wrappers/* install/*.sh service/cred-forward-link
+(cd /src && shellcheck -x scripts/devenv scripts/devenv-doctor scripts/devenv-update scripts/devenv-sync-skills lib/doctor.sh)
 
 test_root=$(mktemp -d)
 trap 'jobs -pr | xargs -r kill; rm -rf "$test_root"' EXIT
+trap 'echo "docker-test.sh: failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 install_home=$test_root/install-home
 mkdir -p "$install_home"
@@ -56,6 +58,7 @@ cat >"$launcher_home/.local/bin/cred-agent" <<'EOF'
 #!/bin/sh
 set -eu
 printf '%s' "$CRED_AGENT_SOCKET"
+[ $# -eq 0 ] || printf ' %s' "$@"
 EOF
 chmod 0755 "$launcher_home/.local/bin/cred-agent"
 printf '%s\n' 'CRED_AGENT_SOCKET=/tmp/not-the-managed-socket' \
@@ -70,6 +73,28 @@ grep -Fq 'agent.env must be an owner-only regular file' "$test_root/unsafe-agent
 chmod 0600 "$launcher_home/.config/cred-forward/agent.env"
 HOME=$launcher_home ./service/cred-agent-launch >"$test_root/managed-socket.out"
 [ "$(cat "$test_root/managed-socket.out")" = "$launcher_home/.cache/cred-agent.sock" ]
+# Every link host gets its own local socket so the agent knows who asks.
+printf '%s\n' '# managed' 'sim0 /home/remote/.cache/cred.sock' 'sim4 /home/remote/.cache/cred.sock' \
+    >"$launcher_home/.config/cred-forward/links"
+HOME=$launcher_home ./service/cred-agent-launch >"$test_root/host-sockets.out"
+[ "$(cat "$test_root/host-sockets.out")" = "$launcher_home/.cache/cred-agent.sock -host-socket sim0=$launcher_home/.cache/cred-agent-sim0.sock -host-socket sim4=$launcher_home/.cache/cred-agent-sim4.sock" ]
+rm -f "$launcher_home/.config/cred-forward/links"
+# The agent itself rejects a malformed host name.
+if ./dist/linux-amd64/cred-agent -socket "$test_root/x.sock" -host-socket 'bad;host=/tmp/x' 2>"$test_root/bad-host.err"; then
+    echo 'cred-agent unexpectedly accepted an invalid link host' >&2
+    exit 1
+fi
+grep -Fq 'invalid host name' "$test_root/bad-host.err"
+# The link service skips every host the off file lists, on several lines.
+off_home=$test_root/off-home
+mkdir -p "$off_home/.config/cred-forward" "$off_home/.local/share/cred-forward"
+printf '%s\n' 'sim0 /home/remote/.cache/cred.sock' 'sim2 /home/remote/.cache/cred.sock' 'sim4 /home/remote/.cache/cred.sock' \
+    >"$off_home/.config/cred-forward/links"
+printf '%s\n' '# off' sim0 sim4 >"$off_home/.local/share/cred-forward/link-off"
+[ "$(HOME=$off_home bash service/cred-forward-link active)" = sim2 ]
+[ "$(HOME=$off_home bash service/cred-forward-link hosts | paste -sd ' ' -)" = 'sim0 sim2 sim4' ]
+printf '%s\n' '*' >"$off_home/.local/share/cred-forward/link-off"
+[ -z "$(HOME=$off_home bash service/cred-forward-link active)" ]
 
 # The top-level installer completes role-specific setup. Stub service and SSH
 # commands so this test does not need a running systemd user manager or another
@@ -160,6 +185,9 @@ HOME=$server_home PATH=$server_path DEVENV_HOME=/src CRED_FORWARD_ROLE=server \
 [ "$(wc -l <"$server_home/ssh-remote-probed")" = 1 ]
 [ "$(cat "$server_home/.local/share/cred-forward/role")" = server ]
 [ -S "$server_home/.cache/cred-agent.sock" ]
+[ -S "$server_home/.cache/cred-agent-sim0.sock" ]
+[ "$(stat -c '%a' "$server_home/.config/cred-forward/gh-account")" = 600 ]
+[ -z "$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$server_home/.config/cred-forward/gh-account")" ]
 # The forward lives in the links file that the link service reads, never in
 # an SSH config entry, so ordinary logins cannot bind the remote socket.
 [ -L "$server_home/.ssh/config" ]
@@ -172,6 +200,90 @@ grep -Fxq 'sim0 /home/remote/.cache/cred.sock' "$server_home/.config/cred-forwar
 # The link service starts once and is left alone by an unchanged reinstall.
 [ "$(wc -l <"$server_home/cred-forward-link-restarts")" = 1 ]
 [ "$(HOME=$server_home "$server_home/.local/bin/cred-forward-link" hosts)" = sim0 ]
+[ "$(HOME=$server_home "$server_home/.local/bin/cred-forward-link" active)" = sim0 ]
+
+# devenv server on|off stops and starts the link service and survives a
+# reinstall; devenv server gh use pins the login without an agent restart.
+devenv_server() {
+    HOME=$server_home PATH=$server_path DEVENV_HOME=/src /src/scripts/devenv "$@"
+}
+devenv_server status >"$test_root/server-status.log" 2>&1
+grep -Fq 'sim0: on' "$test_root/server-status.log"
+devenv_server server off >"$test_root/server-off.log" 2>&1
+[ "$(cat "$server_home/.local/share/cred-forward/link-off")" = '*' ]
+# Off is a restart: the supervisor reads the off file and exits cleanly.
+[ "$(wc -l <"$server_home/cred-forward-link-restarts")" = 2 ]
+[ -z "$(HOME=$server_home "$server_home/.local/bin/cred-forward-link" active)" ]
+HOME=$server_home "$server_home/.local/bin/cred-forward-link" run >"$test_root/link-off-run.out" 2>"$test_root/link-off-run.err"
+grep -Fq 'switched off' "$test_root/link-off-run.err"
+HOME=$server_home PATH=$server_path DEVENV_HOME=/src CRED_FORWARD_ROLE=server \
+    CRED_FORWARD_HOSTS=sim0 /src/cred-forward/install.sh >"$test_root/server-reinstall-off.log" 2>&1
+grep -Fq 'switched off' "$test_root/server-reinstall-off.log"
+# The stub never exits, so it looks alive and the installer restarts it once
+# more to make it re-read the off list.
+[ "$(wc -l <"$server_home/cred-forward-link-restarts")" = 3 ]
+devenv_server status >"$test_root/server-status-off.log" 2>&1
+grep -Fq 'credential links: off' "$test_root/server-status-off.log"
+devenv_server server on >"$test_root/server-on.log" 2>&1
+[ ! -e "$server_home/.local/share/cred-forward/link-off" ]
+[ "$(wc -l <"$server_home/cred-forward-link-restarts")" = 4 ]
+# Switching off the only host is the same as switching everything off.
+devenv_server server off sim0 >"$test_root/server-off-host.log" 2>&1
+[ "$(cat "$server_home/.local/share/cred-forward/link-off")" = '*' ]
+devenv_server server on sim0 >"$test_root/server-on-host.log" 2>&1
+[ ! -e "$server_home/.local/share/cred-forward/link-off" ]
+[ "$(wc -l <"$server_home/cred-forward-link-restarts")" = 6 ]
+if devenv_server server off nosuch >/dev/null 2>"$test_root/server-off-unknown.err"; then
+    echo 'devenv server off unexpectedly accepted an unknown host' >&2
+    exit 1
+fi
+grep -Fq 'unknown host: nosuch' "$test_root/server-off-unknown.err"
+if devenv_server client off >/dev/null 2>"$test_root/server-client.err"; then
+    echo 'devenv client unexpectedly ran on a server' >&2
+    exit 1
+fi
+grep -Fq 'this machine is a cred-forward server' "$test_root/server-client.err"
+server_client() {
+    CRED_FORWARD_SOCKET=$1 /src/cred-forward/dist/linux-amd64/cred-client github "${@:2}"
+}
+devenv_server server gh use anchi-t2 >"$test_root/gh-use.log" 2>&1
+grep -Fxq '* anchi-t2' "$server_home/.config/cred-forward/gh-account"
+[ "$(server_client "$server_home/.cache/cred-agent-sim0.sock" tigercosmos)" = github-login-anchi-t2 ]
+[ "$(server_client "$server_home/.cache/cred-agent.sock")" = github-login-anchi-t2 ]
+devenv_server server gh use tigercosmos --host sim0 >"$test_root/gh-use-host.log" 2>&1
+grep -Fxq 'sim0 tigercosmos' "$server_home/.config/cred-forward/gh-account"
+grep -Fxq '* anchi-t2' "$server_home/.config/cred-forward/gh-account"
+[ "$(server_client "$server_home/.cache/cred-agent-sim0.sock" anchi-t2)" = github-login-tigercosmos ]
+[ "$(server_client "$server_home/.cache/cred-agent.sock" tigercosmos)" = github-login-anchi-t2 ]
+devenv_server server gh status >"$test_root/gh-status.log" 2>&1
+grep -Fq 'sim0 -> tigercosmos' "$test_root/gh-status.log"
+grep -Fq 'every host -> anchi-t2' "$test_root/gh-status.log"
+devenv_server server gh use auto --host sim0 >/dev/null 2>&1
+devenv_server server gh use auto >/dev/null 2>&1
+[ -z "$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$server_home/.config/cred-forward/gh-account")" ]
+grep -Fq 'Managed by devenv cred-forward' "$server_home/.config/cred-forward/gh-account"
+[ "$(server_client "$server_home/.cache/cred-agent-sim0.sock" anchi-t2)" = github-login-anchi-t2 ]
+# The refresh commands are interactive; without a terminal they change nothing.
+devenv_server server claude status >"$test_root/claude-status.log" 2>&1
+grep -Fq 'remotes receive the setup token stored' "$test_root/claude-status.log"
+devenv_server server codex status >"$test_root/codex-status.log" 2>&1
+grep -Fq 'remotes receive the ChatGPT login' "$test_root/codex-status.log"
+printf '%s\n' '#!/bin/sh' 'exit 0' >"$server_home/.local/bin/claude"
+chmod 0755 "$server_home/.local/bin/claude"
+if devenv_server server claude refresh </dev/null >/dev/null 2>"$test_root/claude-refresh.err"; then
+    echo 'devenv server claude refresh unexpectedly ran without a terminal' >&2
+    exit 1
+fi
+grep -Fq 'needs a terminal' "$test_root/claude-refresh.err"
+[ "$(cat "$server_home/.local/share/cred-forward/secrets/claude-oauth")" = claude-login ]
+if devenv_server server gh use 'bad;login' >/dev/null 2>&1; then
+    echo 'devenv server gh use unexpectedly accepted a malformed login' >&2
+    exit 1
+fi
+if devenv_server server gh use anchi-t2 --host nosuch >/dev/null 2>&1; then
+    echo 'devenv server gh use unexpectedly accepted an unknown host' >&2
+    exit 1
+fi
 HOME=$server_home CRED_FORWARD_SOCKET="$server_home/.cache/cred-agent.sock" \
     /src/cred-forward/dist/linux-amd64/cred-client github >"$test_root/server-github"
 [ "$(cat "$test_root/server-github")" = github-login ]
@@ -246,6 +358,38 @@ HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
 HOME=$client_home PATH=$client_path SHELL=/bin/bash DEVENV_HOME=/src \
     /src/cred-forward/install.sh >"$test_root/client-reinstall.log" 2>&1
 [ "$(cat "$client_home/.local/share/cred-forward/role")" = client ]
+devenv_client() {
+    HOME=$client_home PATH=$client_path DEVENV_HOME=/src /src/scripts/devenv "$@"
+}
+devenv_client client off gh >"$test_root/client-off-gh.log" 2>&1
+[ "$(cat "$client_home/.local/share/cred-forward/disabled")" = gh ]
+[ "$(stat -c '%a' "$client_home/.local/share/cred-forward/disabled")" = 600 ]
+devenv_client client off >"$test_root/client-off.log" 2>&1
+[ "$(paste -sd ' ' "$client_home/.local/share/cred-forward/disabled")" = 'gh claude codex' ]
+devenv_client client on claude >"$test_root/client-on-claude.log" 2>&1
+[ "$(paste -sd ' ' "$client_home/.local/share/cred-forward/disabled")" = 'gh codex' ]
+devenv_client status >"$test_root/client-status.log" 2>&1
+grep -Fq 'claude: forwarded login' "$test_root/client-status.log"
+grep -Fq 'gh: local login' "$test_root/client-status.log"
+grep -Fq 'git (HTTPS): local gh login' "$test_root/client-status.log"
+devenv_client client on >"$test_root/client-on.log" 2>&1
+[ ! -e "$client_home/.local/share/cred-forward/disabled" ]
+[ "$(devenv_client client off --once -- sh -c 'printf %s "$CRED_FORWARD_DISABLED"')" = 'gh claude codex' ]
+[ "$(devenv_client client off gh --once -- sh -c 'printf %s "$CRED_FORWARD_DISABLED"')" = gh ]
+[ ! -e "$client_home/.local/share/cred-forward/disabled" ]
+if devenv_client client off gh -- true >/dev/null 2>&1; then
+    echo 'devenv client off unexpectedly accepted a command without --once' >&2
+    exit 1
+fi
+if devenv_client client off vim >/dev/null 2>&1; then
+    echo 'devenv client off unexpectedly accepted an unknown tool' >&2
+    exit 1
+fi
+if devenv_client server off >/dev/null 2>"$test_root/client-server.err"; then
+    echo 'devenv server unexpectedly ran on a client' >&2
+    exit 1
+fi
+grep -Fq 'this machine is a cred-forward client' "$test_root/client-server.err"
 # The client install routes HTTPS git credentials through the helper, once,
 # after any helper that gh auth setup-git configured earlier.
 [ "$(HOME=$client_home git config --global --get-all include.path | grep -Fxc '~/.config/cred-forward/gitconfig')" = 1 ]
@@ -375,14 +519,44 @@ export CRED_AGENT_GITHUB_TOKEN_TIGERCOSMOS=fake-personal-token
 export CRED_AGENT_ANTHROPIC=fake-anthropic-token
 export CRED_AGENT_OPENAI=fake-openai-token
 local_socket=$test_root/cred-agent.sock
-./dist/linux-amd64/cred-agent -socket "$local_socket" 2>"$test_root/agent.log" &
+host_socket=$test_root/cred-agent-sim4.sock
+gh_pin=$test_root/gh-account
+./dist/linux-amd64/cred-agent -socket "$local_socket" -host-socket "sim4=$host_socket" \
+    -github-pin "$gh_pin" >"$test_root/agent.log" 2>&1 &
 agent_pid=$!
 for _ in $(seq 1 50); do
-    [ -S "$local_socket" ] && break
+    [ -S "$local_socket" ] && [ -S "$host_socket" ] && break
     sleep 0.05
 done
 [ "$(stat -c '%a' "$local_socket")" = 600 ]
+[ "$(stat -c '%a' "$host_socket")" = 600 ]
 [ "$(CRED_FORWARD_SOCKET=$local_socket ./dist/linux-amd64/cred-client github)" = fake-github-token ]
+# A per-host pin overrides the requested account on that host's socket only;
+# the "*" pin covers the rest. The agent reads the file on every request.
+[ "$(CRED_FORWARD_SOCKET=$host_socket ./dist/linux-amd64/cred-client github anchi-t2)" = fake-work-token ]
+printf '%s\n' 'sim4 tigercosmos' >"$gh_pin"
+[ "$(CRED_FORWARD_SOCKET=$host_socket ./dist/linux-amd64/cred-client github anchi-t2)" = fake-personal-token ]
+[ "$(CRED_FORWARD_SOCKET=$host_socket ./dist/linux-amd64/cred-client github)" = fake-personal-token ]
+[ "$(CRED_FORWARD_SOCKET=$local_socket ./dist/linux-amd64/cred-client github anchi-t2)" = fake-work-token ]
+printf '%s\n' '* anchi-t2' 'sim4 tigercosmos' >"$gh_pin"
+[ "$(CRED_FORWARD_SOCKET=$local_socket ./dist/linux-amd64/cred-client github tigercosmos)" = fake-work-token ]
+[ "$(CRED_FORWARD_SOCKET=$host_socket ./dist/linux-amd64/cred-client github)" = fake-personal-token ]
+printf '%s\n' '* not-a-login!' >"$gh_pin"
+if CRED_FORWARD_SOCKET=$host_socket ./dist/linux-amd64/cred-client github >/dev/null 2>&1; then
+    echo 'agent unexpectedly served a credential with a malformed pin file' >&2
+    exit 1
+fi
+rm -f "$gh_pin"
+[ "$(CRED_FORWARD_SOCKET=$host_socket ./dist/linux-amd64/cred-client github anchi-t2)" = fake-work-token ]
+grep -Fq 'host=sim4 service=github account=anchi-t2 pinned=tigercosmos status=ok' "$test_root/agent.log"
+grep -Fq 'host=- service=github account=- pinned=- status=ok' "$test_root/agent.log"
+# An unreachable agent is exit 3; an agent that refuses is exit 1.
+if CRED_FORWARD_SOCKET=$test_root/nowhere.sock ./dist/linux-amd64/cred-client github 2>/dev/null; then
+    echo 'cred-client unexpectedly succeeded without a socket' >&2
+    exit 1
+fi
+CRED_FORWARD_SOCKET=$test_root/nowhere.sock ./dist/linux-amd64/cred-client github 2>/dev/null || [ $? = 3 ]
+CRED_FORWARD_SOCKET=$local_socket ./dist/linux-amd64/cred-client github nobody 2>/dev/null || [ $? = 1 ]
 
 mkdir -p "$test_root/real" "$test_root/wrappers"
 cp wrappers/* "$test_root/wrappers/"
@@ -393,6 +567,20 @@ for tool in gh claude codex; do
 #!/bin/sh
 set -eu
 
+# The local gh login that the git helper asks for when forwarding is off.
+if [ "${1:-}" = auth ] && [ "${2:-}" = token ]; then
+    [ "${6:-}" != nobody ] || exit 1
+    printf 'local-token-%s' "${6:-default}"
+    exit 0
+fi
+# EXPECT_LOCAL=1: the wrapper must run the real tool untouched.
+if [ "${EXPECT_LOCAL:-0}" = 1 ]; then
+    test -z "${GH_TOKEN:-}"
+    test -z "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+    test "$*" = test-argument
+    printf 'local-ok:%s\n' "$(basename "$0")"
+    exit 0
+fi
 case "$(basename "$0")" in
     gh) test "$GH_TOKEN" = "${EXPECT_GH_TOKEN:-fake-github-token}" ;;
     claude)
@@ -435,6 +623,44 @@ export PATH="$test_root/wrappers:$test_root/real:$PATH"
 [ "$(claude test-argument)" = wrapper-ok:claude ]
 [ "$(codex test-argument)" = wrapper-ok:codex ]
 
+# `devenv client off` lists tools in the disabled file; `--once` uses the
+# environment. A listed tool runs untouched, the others stay forwarded.
+[ "$(CRED_FORWARD_DISABLED=gh EXPECT_LOCAL=1 gh test-argument)" = local-ok:gh ]
+[ "$(CRED_FORWARD_DISABLED=gh claude test-argument)" = wrapper-ok:claude ]
+[ "$(CRED_FORWARD_DISABLED=all EXPECT_LOCAL=1 claude test-argument)" = local-ok:claude ]
+[ "$(CRED_FORWARD_DISABLED='gh codex' EXPECT_LOCAL=1 codex test-argument)" = local-ok:codex ]
+export CRED_FORWARD_STATE_DIR=$test_root/client-state
+mkdir -p "$CRED_FORWARD_STATE_DIR"
+printf '%s\n' '# comment' claude >"$CRED_FORWARD_STATE_DIR/disabled"
+[ "$(EXPECT_LOCAL=1 claude test-argument)" = local-ok:claude ]
+[ "$(gh test-argument)" = wrapper-ok:gh ]
+[ "$(codex test-argument)" = wrapper-ok:codex ]
+rm -f "$CRED_FORWARD_STATE_DIR/disabled"
+[ "$(claude test-argument)" = wrapper-ok:claude ]
+
+# An unreachable agent never falls back on its own: without a terminal the
+# wrapper fails with exit 3 unless CRED_FORWARD_FALLBACK=1 says otherwise.
+for tool in gh claude codex; do
+    if CRED_FORWARD_SOCKET=$test_root/nowhere.sock "$tool" test-argument </dev/null \
+        >"$test_root/unreachable-$tool.out" 2>"$test_root/unreachable-$tool.err"; then
+        echo "$tool wrapper unexpectedly succeeded without an agent" >&2
+        exit 1
+    fi
+    CRED_FORWARD_SOCKET=$test_root/nowhere.sock "$tool" test-argument </dev/null >/dev/null 2>&1 || [ $? = 3 ]
+    grep -Fq 'no terminal is attached' "$test_root/unreachable-$tool.err"
+    grep -Fq "devenv client off $tool" "$test_root/unreachable-$tool.err"
+    [ "$(CRED_FORWARD_SOCKET=$test_root/nowhere.sock CRED_FORWARD_FALLBACK=1 EXPECT_LOCAL=1 "$tool" test-argument </dev/null)" = "local-ok:$tool" ]
+    if CRED_FORWARD_SOCKET=$test_root/nowhere.sock CRED_FORWARD_FALLBACK=0 EXPECT_LOCAL=1 "$tool" test-argument </dev/null >/dev/null 2>&1; then
+        echo "$tool wrapper fell back although CRED_FORWARD_FALLBACK=0" >&2
+        exit 1
+    fi
+done
+# An agent that answers with an error is not "unreachable": no fallback.
+if CRED_FORWARD_FALLBACK=1 CRED_FORWARD_GITHUB_ACCOUNT=nobody EXPECT_LOCAL=1 gh test-argument </dev/null >/dev/null 2>&1; then
+    echo 'gh wrapper fell back after the agent refused the account' >&2
+    exit 1
+fi
+
 # The gh wrapper selects the login from the repository owner. Without an
 # account map it keeps using the active login.
 [ "$(CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/missing-map gh pr list -R t2-auto/proj)" = wrapper-ok:gh ]
@@ -448,6 +674,9 @@ cp config/github-accounts "$CRED_FORWARD_GITHUB_ACCOUNTS"
 [ "$(EXPECT_GH_TOKEN=fake-work-token gh repo clone t2-auto/proj)" = wrapper-ok:gh ]
 [ "$(EXPECT_GH_TOKEN=fake-work-token gh repo clone -- t2-auto/proj)" = wrapper-ok:gh ]
 [ "$(EXPECT_GH_TOKEN=fake-work-token gh repo view --web t2-auto/proj)" = wrapper-ok:gh ]
+# Values of options the wrapper does not know are never taken for the repo.
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh repo view --branch main t2-auto/proj)" = wrapper-ok:gh ]
+[ "$(EXPECT_GH_TOKEN=fake-work-token gh repo clone --upstream-remote-name upstream t2-auto/proj ./proj)" = wrapper-ok:gh ]
 [ "$(EXPECT_GH_TOKEN=fake-personal-token gh repo view cli/cli)" = wrapper-ok:gh ]
 [ "$(EXPECT_GH_TOKEN=fake-personal-token gh issue create docs/readme)" = wrapper-ok:gh ]
 [ "$(EXPECT_GH_TOKEN=fake-personal-token gh test-argument)" = wrapper-ok:gh ]
@@ -490,6 +719,26 @@ credential_fill() {
 [ "$(cd "$test_root/work-repo" && credential_fill https github.com '')" = "$(printf 'username=anchi-t2\npassword=fake-work-token')" ]
 [ -z "$(credential_fill https gitlab.com t2-auto/proj.git)" ]
 [ -z "$(credential_fill http github.com t2-auto/proj.git)" ]
+# With forwarding off for gh, the helper asks the remote's own gh for the
+# mapped account and refuses when that login is missing.
+[ "$(CRED_FORWARD_DISABLED=gh credential_fill https github.com t2-auto/proj.git)" = "$(printf 'username=anchi-t2\npassword=local-token-anchi-t2')" ]
+[ "$(CRED_FORWARD_DISABLED=all credential_fill https github.com cli/cli)" = "$(printf 'username=tigercosmos\npassword=local-token-tigercosmos')" ]
+[ "$(CRED_FORWARD_DISABLED=claude credential_fill https github.com cli/cli)" = "$(printf 'username=tigercosmos\npassword=fake-personal-token')" ]
+if CRED_FORWARD_DISABLED=gh CRED_FORWARD_GITHUB_ACCOUNT=nobody credential_fill https github.com cli/cli \
+    >/dev/null 2>"$test_root/helper-local-missing.err"; then
+    echo 'git credential helper unexpectedly answered without a local login' >&2
+    exit 1
+fi
+grep -Fq 'no login for nobody' "$test_root/helper-local-missing.err"
+[ "$(CRED_FORWARD_DISABLED=gh CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/missing-map credential_fill https github.com cli/cli)" \
+    = "$(printf 'username=x-access-token\npassword=local-token-default')" ]
+if CRED_FORWARD_SOCKET=$test_root/nowhere.sock credential_fill https github.com cli/cli \
+    >/dev/null 2>"$test_root/helper-unreachable.err"; then
+    echo 'git credential helper unexpectedly answered without an agent' >&2
+    exit 1
+fi
+grep -Fq 'devenv client off gh' "$test_root/helper-unreachable.err"
+[ "$(CRED_FORWARD_SOCKET=$test_root/nowhere.sock CRED_FORWARD_FALLBACK=1 credential_fill https github.com t2-auto/proj.git)" = "$(printf 'username=anchi-t2\npassword=local-token-anchi-t2')" ]
 [ -z "$(printf 'protocol=https\nhost=github.com\nusername=x\npassword=y\n\n' | "$helper" store)" ]
 [ -z "$(printf 'protocol=https\nhost=github.com\n\n' | "$helper" erase)" ]
 [ "$(CRED_FORWARD_GITHUB_ACCOUNTS=$test_root/missing-map credential_fill https github.com t2-auto/proj.git)" \

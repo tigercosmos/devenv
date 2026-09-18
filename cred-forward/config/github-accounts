@@ -4,5 +4,6 @@
 # fallback for every other owner. Owners match case-insensitively.
 # Leave this file out to use the active local gh login for everything.
 t2-auto anchi-t2
+solvcon tigercosmos
 tigercosmos tigercosmos
 * tigercosmos
