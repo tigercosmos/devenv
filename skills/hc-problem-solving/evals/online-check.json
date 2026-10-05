@@ -1,0 +1,524 @@
+{
+  "run_date": "2026-10-05",
+  "revision": "Before review fixes; identify by tested_file_sha256, not current package contents.",
+  "protocol": {
+    "created_utc": "2026-10-04T19:47:00.159942+00:00",
+    "protocol": "Two fresh contexts, five cases each; framework files only, answers and rubrics withheld. Separate fresh source auditor/grader. Instruction-level isolation on a shared filesystem, not a security sandbox. No model-without-skill baseline; no causal efficacy claim.",
+    "frozen_rubric_sha256": "eafbcc45aa2f69b7ea2514df2ceb7e16e3e694afc86a46c481ba8276e64ebe8e",
+    "implementation_revision": "Unmodified skill following prior Claude review; known findings intentionally retained for this check.",
+    "package_validation": "hc.py check --source-dir: schema and primary PDF provenance PASS. test_package.py --source-dir: ten tests PASS.",
+    "pdf_sha256": "07e56ff3aec9df421f304dfef3b9ea48be53154984369f2ad2a92cb5a4ec7d66"
+  },
+  "model_version": "Not recorded; fresh agents inherited the active model.",
+  "contexts": "Two solver contexts, five cases each; separate fresh source auditor/grader.",
+  "grading_rule": "Per criterion: 2 explicitly satisfied, 1 partial, 0 absent or incorrect. Pass: at least 80% available points and no material unsupported conclusion; source wording or exact operator match is not required. Also record excess verbosity and noncontributing operators separately.",
+  "rubric_frozen_before_generation": true,
+  "limitations": [
+    "No model-without-skill baseline or replication.",
+    "Instruction-level isolation on a shared filesystem.",
+    "Solver-authored access logs lack per-case chronology.",
+    "Public examples may be familiar to the model.",
+    "Copied runtime omitted optional references and authored examples.",
+    "Source stories illustrate reasoning; they do not validate effectiveness."
+  ],
+  "source_audit_summary": {
+    "supported": 5,
+    "unsupported": 0,
+    "ambiguous": 0,
+    "validated_effectiveness_cases": 0,
+    "rubric_has_evaluation_extensions": true
+  },
+  "cases": [
+    {
+      "id": "induction",
+      "kind": "online-adaptation",
+      "source": {
+        "url": "https://www.minerva.edu/public/media/enrollment-center/Minerva-HCs-Intro.pdf",
+        "location": "p. 6, #induction"
+      },
+      "prompt": "Four renewable-energy stocks rose this week. Does that establish a sector-wide trend? How would you investigate?",
+      "reference": "Consider competing generalizations and observations that distinguish them.",
+      "criteria": [
+        "Treat the sector conclusion as tentative; four observations do not establish a sector trend.",
+        "Generate at least two genuinely distinct explanations, such as broad-market movement and sector-specific movement.",
+        "Pair explanations with discriminating evidence, such as market benchmarks versus a representative sector sample."
+      ],
+      "answer": "No. Four rising stocks in one week are compatible with a sector-wide rise, a broad-market rally, or news affecting only those companies. They do not establish breadth or persistence.\n\nDefine the sector and time window before selecting stocks. Examine a representative sector universe or index, the fraction of stocks rising, median and weighted returns, and variation across companies. Compare with the broad market and examine several periods, including company-specific news. A sector trend should extend beyond the four examples; a market rally should also appear outside the sector. Report the pattern and its uncertainty, rather than treating one week as a lasting trend.",
+      "selected_operators": [
+        "induction",
+        "statistics",
+        "research_design"
+      ],
+      "operator_contributions": {
+        "induction": "The answer presents three explanations and distinguishes them through sector breadth and comparisons outside the sector.",
+        "statistics": "The answer calls for breadth, median and weighted returns, variation, and uncertainty instead of generalizing from four positive returns.",
+        "research_design": "The answer specifies a predefined sector universe, time window, market comparison, and repeated observations to limit selective sampling."
+      },
+      "solver": "solver_a",
+      "criterion_scores": [
+        2,
+        2,
+        2
+      ],
+      "points": 6,
+      "max_points": 6,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "door_design",
+      "kind": "online-adaptation",
+      "source": {
+        "url": "https://www.minerva.edu/public/media/enrollment-center/Minerva-HCs-Intro.pdf",
+        "location": "p. 14, #multimodaldesign"
+      },
+      "prompt": "An exit must be pushed open, but has pull-style handles on both faces. Visitors often pull first. What should we change?",
+      "reference": "Physical cues should communicate the required action.",
+      "criteria": [
+        "Identify the mismatch between the physical cue and required action.",
+        "Recommend changing push-side hardware or another physical cue, rather than relying only on extra wording.",
+        "Propose observing actual use after the change; do not invent success rates."
+      ],
+      "answer": "Replace the pull-style handle on the exit/push face with a push plate or push bar. Make the other face’s hardware match its actual opening action. The hardware should make the action apparent; a sign alone leaves the misleading cue in place. Test with unfamiliar visitors and observe whether they push on their first attempt, then revise if confusion persists.",
+      "selected_operators": [
+        "right_problem",
+        "iterative_design"
+      ],
+      "operator_contributions": {
+        "right_problem": "The answer identifies misleading hardware as the gap and recommends hardware that communicates the required opening action.",
+        "iterative_design": "The answer proposes a visitor test using the first opening attempt as the observable success criterion."
+      },
+      "solver": "solver_b",
+      "criterion_scores": [
+        2,
+        2,
+        2
+      ],
+      "points": 6,
+      "max_points": 6,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "referral_ethics",
+      "kind": "online-adaptation",
+      "source": {
+        "url": "https://www.minerva.edu/public/media/enrollment-center/Minerva-HCs-Intro.pdf",
+        "location": "p. 17, #ethicalframing"
+      },
+      "prompt": "We pay staff for every referral interview. They now refer unsuitable friends. Should we merely remind them to be ethical?",
+      "reference": "Reframe the incentive; reward suitable hires and retention.",
+      "criteria": [
+        "Identify incentive misalignment instead of treating this solely as individual dishonesty.",
+        "Propose a concrete incentive or screening change tied to job suitability or hiring outcomes.",
+        "Recognize fairness or conflicts of interest and an independent, consistent assessment; do not promise that a retention threshold fixes every issue."
+      ],
+      "answer": "No. Keep clear conduct expectations, but change the incentive too: payment per interview rewards volume without requiring suitability. Define job-relevant referral criteria, screen before scheduling interviews, and tie any reward to an independently assessed qualified referral. Apply the same criteria to friends and other candidates to protect fair access and avoid wasting candidates’ and interviewers’ time. Give staff a way to flag pressure or favoritism, and monitor referral quality and interview burden after the change.",
+      "selected_operators": [
+        "group_dynamics",
+        "ethical_framing"
+      ],
+      "operator_contributions": {
+        "group_dynamics": "The answer changes the volume-based incentive and assigns independent screening with a channel for reporting pressure.",
+        "ethical_framing": "The answer protects candidates’ fair access and identifies the time costs borne by candidates and interviewers."
+      },
+      "solver": "solver_b",
+      "criterion_scores": [
+        2,
+        2,
+        2
+      ],
+      "points": 6,
+      "max_points": 6,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "wildfire_warning",
+      "kind": "online-adaptation",
+      "source": {
+        "url": "https://www.minerva.edu/blog/minerva-university-team-wins-nasa-space-apps-challenge-in-mountain-view/",
+        "location": "November 21, 2023, project question and HC application interview"
+      },
+      "prompt": "We want to warn and guide people during wildfires. The people we most need to reach lack dependable internet and mobile service, and the budget is tight. A teammate proposes an app. What direction should the prototype take?",
+      "reference": "Focus on the unreached population; use connectivity and cost constraints to motivate accessible physical signals and local communication. The published hackathon proposal used mesh networking and an aircraft-navigation analogy. This is a proposal, not validated safety evidence.",
+      "criteria": [
+        "Frame success as warning and guiding the unreachable population, rather than building an app.",
+        "Treat public internet/mobile reliance as infeasible for the primary warning path and compare a concrete offline/local alternative.",
+        "Address accessible or understandable public guidance, cost, and failure conditions; a mesh network is one acceptable candidate, not a required answer.",
+        "Keep safety claims conditional and require emergency-services coordination or realistic validation."
+      ],
+      "answer": "Prototype a warning-and-guidance service that works without internet or mobile coverage. The goal is for the hardest-to-reach residents to receive, understand, and act on current official instructions within the available budget. An app could supplement that service where connectivity exists.\n\nStart with residents and local emergency responders to identify channels people actually receive: for example, broadcast radio, existing public-address systems, physical notices at gathering points, or trained community relays where safe. Compare their reach, cost, power needs, accessibility, and ability to update instructions; none should be assumed reliable without checking. Use a small combination with a clear official message source, timestamps, and a way to replace outdated guidance.\n\nTest the cheapest feasible combination in a supervised drill with connectivity unavailable. Measure who receives the message, how quickly, whether they understand the required action, and who is missed. Agree on acceptance targets with responders, then revise the channel or message that fails them.",
+      "selected_operators": [
+        "right_problem",
+        "constraints",
+        "audience_design",
+        "iterative_design"
+      ],
+      "operator_contributions": {
+        "right_problem": "The answer reframes success as receiving, understanding, and acting on warnings rather than building an app.",
+        "constraints": "The answer requires operation without dependable connectivity and compares feasible channels against cost, power, accessibility, and update needs.",
+        "audience_design": "The answer selects media with the affected residents and calls for clear, current official instructions suited to their needs.",
+        "iterative_design": "The answer proposes a bounded connectivity-free drill with reach, timing, comprehension, and missed-resident measures that guide revisions."
+      },
+      "solver": "solver_a",
+      "criterion_scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "points": 8,
+      "max_points": 8,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "budget_authority",
+      "kind": "online-adaptation",
+      "source": {
+        "url": "https://www.minerva.edu/blog/the-operating-system-between-you-and-ai-a-conversation-with-m21-gavin-lee/",
+        "location": "Advice section, constraints versus obstacles anecdote"
+      },
+      "prompt": "A client project manager says the budget is $120,000. Our proposed package costs $180,000. Sales says the deal is impossible. Should we stop? We do not know who can approve spending.",
+      "reference": "Check whose authority defines the budget before treating a report as immutable. More budget is possible, not established.",
+      "criteria": [
+        "Separate the stated budget from a verified hard limit; identify missing approval authority.",
+        "Suggest a respectful inquiry into authority, scope, or budget flexibility.",
+        "Compare at least one lower-cost or staged option and allow stopping if value or the verified ceiling makes the deal infeasible.",
+        "Avoid assuming an executive will increase the budget or bypassing the project manager automatically."
+      ],
+      "answer": "Do not stop solely on this information. Whether $120,000 is a firm ceiling, and who can authorize more, remain unknown. Ask the project manager to identify the spending approver and confirm how firm the budget is. Compare a viable reduced-scope package within $120,000, a phased package with total cost disclosed and later funding explicitly approved, and the full $180,000 package if additional funding is authorized. Stop if the authorized ceiling is firm and no acceptable scope fits it.",
+      "selected_operators": [
+        "constraints",
+        "assumption_check",
+        "negotiation"
+      ],
+      "operator_contributions": {
+        "constraints": "The answer treats the stated budget as an unverified limit and conditions feasibility on the confirmed authorized ceiling.",
+        "assumption_check": "The answer names unknown spending authority and budget flexibility as the facts to check before rejecting the deal.",
+        "negotiation": "The answer compares reduced-scope, explicitly funded phased, and fully funded packages through the identified approval process."
+      },
+      "solver": "solver_b",
+      "criterion_scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "points": 8,
+      "max_points": 8,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "causal_revenue",
+      "kind": "original-transfer",
+      "source": null,
+      "prompt": "Revenue rose 20% after our feature launch. Marketing spend and prices also rose that month, and it was our usual busy season. Can we attribute the increase to the feature? What evidence is most useful next?",
+      "reference": null,
+      "criteria": [
+        "Do not infer causation from temporal association.",
+        "Identify marketing, prices, and seasonality as alternative causes or confounders.",
+        "Propose a credible comparison design and its assumptions, preferably randomization when feasible or a suitable comparison group and pre-trends.",
+        "Prioritize discriminating evidence and practical effect size; do not invent the feature effect."
+      ],
+      "answer": "No. The 20% increase is an observed change after launch, not an estimate of the feature’s contribution. Higher prices, marketing, and the busy season could explain some or all of it.\n\nThe most useful evidence is a contemporaneous randomized holdout: comparable eligible customers with and without access to the feature, exposed to the same pricing and marketing policies during the same season. Measure revenue per eligible customer over a defined window, with purchase frequency and average price as supporting measures. Analyze assignment rather than only feature users, since adoption can select unusually active customers.\n\nIf a holdout is unavailable, compare a credible unexposed group’s pre/post change with the exposed group’s, examining prior trends and differences in prices, marketing, and customer mix. That estimate depends on stronger assumptions; adjustment alone does not establish causation. Historical seasonal data can help, but last year’s revenue alone is a weaker counterfactual.",
+      "selected_operators": [
+        "correlation_causation",
+        "variables",
+        "research_design"
+      ],
+      "operator_contributions": {
+        "correlation_causation": "The answer separates the observed revenue increase from a causal effect and identifies concurrent changes and adoption selection as alternative explanations.",
+        "variables": "The answer defines revenue per eligible customer, the measurement window, supporting purchase measures, and pricing, marketing, season, and customer mix as relevant inputs.",
+        "research_design": "The answer prioritizes a randomized contemporaneous holdout and provides a pre/post comparison alternative with explicit validity limits."
+      },
+      "solver": "solver_a",
+      "criterion_scores": [
+        2,
+        2,
+        2,
+        1
+      ],
+      "points": 7,
+      "max_points": 8,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "hub_fidelity",
+      "kind": "original-transfer",
+      "source": null,
+      "prompt": "We must choose between two autonomous-truck hub layouts based on hourly throughput and queue length. We have arrival and service-time data, but no calibrated vehicle-motion model. Should we build microscopic driving simulation before any discrete-event simulation?",
+      "reference": null,
+      "criteria": [
+        "Tie model fidelity to the layout decision and bottlenecks.",
+        "Offer a DES-first or staged comparison, with arrivals, resources, service times and layout-dependent movement assumptions.",
+        "State conditions under which motion fidelity could change layout ranking, such as conflicts or travel times.",
+        "Identify missing calibration or validation evidence; do not assume microscopic dynamics are irrelevant or treat layout as fixed while comparing layouts."
+      ],
+      "answer": "No. Start with a discrete-event model aimed at hourly throughput and queue length. A microscopic driving simulation is not a prerequisite, and without calibration its extra detail may add unsupported assumptions.\n\nFor each layout, model arrivals, service-time distributions, service stations, routing, queue capacities, and any shared resources or blocking that could affect flow. Preserve relevant time-of-day variation and dependence in the data. Represent travel and intersection occupancy at an aggregate level initially, with their uncertainty explicit. Compare both layouts under the same demand scenarios and report throughput and queue distributions, not just averages. Check model behavior against observed operations where available and basic capacity and flow checks.\n\nVary uncertain movement times, shared-resource capacities, and blocking rules over defensible scenarios. If the preferred layout remains the same, microscopic detail may add little to this decision. If the ranking changes, collect the movement data that distinguishes those cases and add targeted detail; build microscopic simulation only when interactions such as maneuvering or collision avoidance materially determine the ranking and can be calibrated. Until then, keep the layout recommendation conditional.",
+      "selected_operators": [
+        "model_types",
+        "variables",
+        "sensitivity_analysis"
+      ],
+      "operator_contributions": {
+        "model_types": "The answer chooses discrete-event simulation for the requested outputs, defines its scope and validation checks, and makes microscopic detail conditional on a decision-relevant need.",
+        "variables": "The answer identifies throughput and queue distributions as outputs and arrivals, service times, routing, capacities, travel, and blocking as model inputs.",
+        "sensitivity_analysis": "The answer tests whether uncertain movement and blocking assumptions reverse the layout ranking and directs further measurement to those conditions."
+      },
+      "solver": "solver_a",
+      "criterion_scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "points": 8,
+      "max_points": 8,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "proxy_optimization",
+      "kind": "original-transfer",
+      "source": null,
+      "prompt": "A warehouse team wants to maximize boxes packed per worker-hour. The actual business goal is reliable, accurate orders shipped on time without exhausting staff. What should the optimization problem be?",
+      "reference": null,
+      "criteria": [
+        "Identify throughput as a proxy that may undermine the actual goal.",
+        "Define a useful objective and observable outcome measures including accuracy and on-time delivery.",
+        "Name decision variables and hard or soft constraints, including staffing, safety/fatigue and capacity.",
+        "Compare or balance trade-offs without invented weights, thresholds, or an unsupported unique optimum."
+      ],
+      "answer": "Optimize the fraction of all orders due in each period that ship complete, correct, and by their promised deadlines. Choose staffing, shift and break schedules, order sequencing, batching, and packing/checking methods.\n\nConstrain those choices by available capacity, required quality checks, safe workload, breaks, and agreed overtime and fatigue limits. Set minimum service and staff-wellbeing requirements; among plans meeting them, minimize labor cost per successful shipment.\n\nMeasure the full process, including rework and all labor time. Compare faster packing, different batching, and added checking against the same shipment and workload criteria. Boxes per worker-hour can help diagnose bottlenecks, but should not determine success by itself.",
+      "selected_operators": [
+        "goals",
+        "constraints",
+        "optimization"
+      ],
+      "operator_contributions": {
+        "goals": "The answer replaces packing volume with complete, correct, on-time shipments and explicit staff-wellbeing requirements.",
+        "constraints": "The answer specifies capacity, quality, break, workload, overtime, and fatigue limits that bound feasible plans.",
+        "optimization": "The answer states an objective, controllable choices, a secondary efficiency criterion, and candidate plans evaluated on end-to-end outcomes."
+      },
+      "solver": "solver_b",
+      "criterion_scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "points": 8,
+      "max_points": 8,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "marginal_inference",
+      "kind": "original-stress",
+      "source": null,
+      "prompt": "A report says Brand Z accounts for more than half of machine failures. We know 49% of failed machines are under 25 months old, and most Brand Z machines are over 35 months old. Do those facts rule out the report? Explain briefly.",
+      "reference": null,
+      "criteria": [
+        "Answer no: age marginals do not determine the brand-by-age failure distribution.",
+        "Identify the missing joint distribution or give a logically consistent counterexample (e.g. 51 old failed machines are Brand Z).",
+        "Do not turn the population age distribution into failure probabilities or claim the report is established."
+      ],
+      "answer": "No. The 49% describes the age distribution of failed machines; “most Brand Z machines are over 35 months old” describes Brand Z’s whole fleet. Neither gives failures jointly by brand and age. For example, the remaining 51% of failures could all be Brand Z machines over 35 months old, which would make the report true. A brand-by-age breakdown of failures would let you check it.",
+      "selected_operators": [
+        "probability"
+      ],
+      "operator_contributions": {
+        "probability": "The answer distinguishes the two conditioning populations and gives a compatible hypothetical allocation of failures."
+      },
+      "solver": "solver_b",
+      "criterion_scores": [
+        2,
+        2,
+        2
+      ],
+      "points": 6,
+      "max_points": 6,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "high"
+    },
+    {
+      "id": "simple_control",
+      "kind": "negative-control",
+      "source": null,
+      "prompt": "What is 2 + 2?",
+      "reference": null,
+      "criteria": [
+        "Answer 4 directly without a framework explanation.",
+        "Select zero operators and avoid registry retrieval for this trivial case."
+      ],
+      "answer": "4.",
+      "selected_operators": [],
+      "operator_contributions": {},
+      "solver": "solver_a",
+      "criterion_scores": [
+        2,
+        2
+      ],
+      "points": 4,
+      "max_points": 4,
+      "pass": true,
+      "unsupported_claims": [],
+      "confidence": "medium"
+    }
+  ],
+  "retrieval_logs": {
+    "solver_a": {
+      "commands": [
+        {
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a",
+          "command": "cat skill/SKILL.md\ncat prompts.json"
+        },
+        {
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill",
+          "command": "python3 scripts/hc.py list"
+        },
+        {
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill",
+          "command": "python3 scripts/hc.py show induction statistics"
+        },
+        {
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill",
+          "command": "python3 scripts/hc.py show right_problem constraints audience_design iterative_design"
+        },
+        {
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill",
+          "command": "python3 scripts/hc.py show correlation_causation variables research_design"
+        },
+        {
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill",
+          "command": "python3 scripts/hc.py show goals model_types sensitivity_analysis"
+        }
+      ],
+      "paths_read": [
+        {
+          "path": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill/SKILL.md",
+          "method": "cat"
+        },
+        {
+          "path": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/prompts.json",
+          "method": "cat"
+        },
+        {
+          "path": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill/scripts/hc.py",
+          "method": "Executed for list/show; source not displayed"
+        },
+        {
+          "path": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_a/skill/hc_registry.yaml",
+          "method": "Read by helper; only compact index and requested records displayed"
+        }
+      ],
+      "runtime_dependencies": [
+        "python3",
+        "Python standard library",
+        "PyYAML loaded by helper"
+      ],
+      "other_sources_accessed": [],
+      "notes": "No references, examples, evaluation files, sibling directories, source URLs, or original repository files were accessed. The goals operator was retrieved as a candidate but not selected because the hub decision objectives were already explicit."
+    },
+    "solver_b": {
+      "commands": [
+        {
+          "command": "cat skill/SKILL.md prompts.json",
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b"
+        },
+        {
+          "command": "python3 scripts/hc.py list",
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b/skill"
+        },
+        {
+          "command": "python3 scripts/hc.py show right_problem iterative_design ethical_framing group_dynamics constraints negotiation assumption_check goals variables optimization probability statistics",
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b/skill"
+        },
+        {
+          "command": "python3 inline script: write results.json and retrieval_log.json",
+          "cwd": "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b"
+        }
+      ],
+      "paths_read": [
+        "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b/skill/SKILL.md",
+        "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b/prompts.json",
+        "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b/skill/scripts/hc.py",
+        "/Users/tigercosmos/.codex/tmp/hc-online-check-20261005/solver_b/skill/hc_registry.yaml"
+      ],
+      "runtime_dependencies": "Python standard library and the installed PyYAML dependency were loaded by the helper; no dependency source files were explicitly inspected.",
+      "notes": "Only the helper list and selected-record show output were used to retrieve registry content. Linked references, examples, evaluations, URLs, and other task directories were not accessed."
+    }
+  },
+  "tested_file_sha256": {
+    "skills/hc-problem-solving/SKILL.md": "2e33bc58d17369a2e340b5580a8e521af9598678fc5ff335906231137441d32e",
+    "skills/hc-problem-solving/evals/behavior.md": "cda1b7f8c118f6fe6c53450f4c3010b0f726134419a75255edebb5da258795b5",
+    "skills/hc-problem-solving/evals/test_package.py": "86a0cc70c9ce6894c92aeef1c0ac96be05ecb9346391b5827198dbde757da1c8",
+    "skills/hc-problem-solving/hc_examples.yaml": "7618dfe3db9cf340c703b85d2123b2058a97f530df654f5f6d1fa3729c1b4fe1",
+    "skills/hc-problem-solving/hc_registry.yaml": "c5855c9288396bc9bc8f50a6fd98a0e2937f9a172c5cfac1dd2cff664f0f5168",
+    "skills/hc-problem-solving/references.md": "738cd182589fdc59097ed3af833e40c3062384b2dd3c7418cb7e00257d3c6fe3",
+    "skills/hc-problem-solving/scripts/hc.py": "819fbaf417176ea3a82fdc5581f7b9d3a24adbf4a4d394dd8f025b1842e538ac"
+  },
+  "total_points": 67,
+  "max_points": 68,
+  "errata": [
+    {
+      "case": "marginal_inference",
+      "fields": [
+        "kind",
+        "source"
+      ],
+      "correction": {
+        "kind": "adapted-stress",
+        "source": {
+          "url": "https://www.minerva.edu/public/media/enrollment-center/Minerva-HCs-Intro.pdf",
+          "location": "p. 5, #estimation"
+        }
+      },
+      "reason": "The machine example adapts the source age-marginal scenario and numbers. It tests missing joint information, not imitation of the source plausibility conclusion."
+    },
+    {
+      "case": "wildfire_warning",
+      "field": "reference",
+      "correction": "The analogy uses aircraft emergency guidance lighting, not general aircraft navigation.",
+      "reason": "Specify the physical guidance mechanism described by the source."
+    },
+    {
+      "case": "simple_control",
+      "criterion_index": 2,
+      "original_score": 2,
+      "assessable": false,
+      "reason": "Batch access logs cannot establish absence of retrieval for this case."
+    }
+  ],
+  "assessable_result": {
+    "points": 65,
+    "max_points": 66,
+    "excluded_criteria": [
+      {
+        "case": "simple_control",
+        "criterion_index": 2
+      }
+    ],
+    "note": "Original frozen data and 67/68 grading remain above as recorded. This correction excludes the unobservable two-point criterion and retains the causal-answer omission.",
+    "cases_passing_threshold": 10,
+    "cases_with_all_assessable_criteria_at_2": 9
+  },
+  "source_pdf_sha256": {
+    "intro.pdf": "07e56ff3aec9df421f304dfef3b9ea48be53154984369f2ad2a92cb5a4ec7d66",
+    "achievement.pdf": "4679df28ec3235779cce5e9fd3b061203a66a8539965edd1b9c0f78ec8895bf4"
+  },
+  "record_interpretation": "Original prompts, labels, scores and local access paths are preserved as recorded; errata supply corrected provenance and assessment. Paths are historical observations, not portable execution instructions."
+}

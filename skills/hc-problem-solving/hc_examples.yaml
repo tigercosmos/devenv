@@ -1,0 +1,439 @@
+# Illustrative scenarios, not claims about a particular repository or business.
+schema_version: 1
+examples:
+  software_parallel:
+    domain: software_engineering
+    prompt: Should we add parallel execution directly into a test framework, or rely on an
+      external plugin/executor?
+    classifications:
+    - design
+    - decision
+    - strategy
+    context:
+    - 'Illustrative assumptions: the framework owns test discovery and result reporting; executors
+      can isolate processes.'
+    - No evidence yet establishes the bottleneck or the executor API requirements.
+    selected:
+      right_problem: Define throughput, isolation, and ownership as the decision criteria.
+      constraints: Check compatibility, cancellation, reproducibility, and shared-resource
+        limits.
+      decomposition: Separate discovery, scheduling, execution, isolation, and result aggregation.
+      system_boundaries: Locate shared state and responsibility across the framework and executor.
+      cost_benefit: Compare maintenance, coordination, and user setup costs.
+      alternative_generation: Compare core scheduling, an external executor, and a stable
+        executor interface.
+    artifacts:
+      problem: Choose execution ownership that improves end-to-end throughput while preserving
+        semantics.
+      constraints:
+        hard:
+        - Keep result semantics and cancellation correct.
+        - Prevent unsafe concurrent use of shared fixtures.
+        soft:
+        - Minimize setup and maintenance.
+        negotiable:
+        - Whether scheduling belongs in the core.
+        conflicting:
+        - Maximum concurrency versus reproducibility.
+        derived:
+        - An external executor needs stable discovery and result interfaces.
+      responsibilities:
+        framework:
+        - discovery
+        - test identity
+        - result contract
+        executor:
+        - scheduling
+        - worker lifecycle
+        - process isolation
+        shared:
+        - cancellation protocol
+        - resource limits
+      alternatives:
+      - option: Core scheduler
+        benefit: One integrated interface.
+        cost: Core owns worker and platform complexity.
+        risk: Shared fixtures may race.
+        assumption: The core can support isolation.
+        consequence: Long-term scheduling maintenance in the framework.
+      - option: External executor
+        benefit: Reuse scheduling and isolation.
+        cost: Integration and setup.
+        risk: Incomplete lifecycle or result contracts.
+        assumption: Existing executor covers required semantics.
+        consequence: Separate scheduler ownership.
+      - option: Executor interface plus a default serial executor
+        benefit: Stable contracts with replaceable execution policy.
+        cost: API design and adapter maintenance.
+        risk: An overly general interface.
+        assumption: The necessary lifecycle can be represented compactly.
+        consequence: Scheduling evolves outside the core.
+      next_evidence: Measure full-run bottlenecks and exercise cancellation, fixture isolation,
+        and result aggregation in an adapter.
+    answer: Start with a stable executor interface if existing executors satisfy isolation
+      and lifecycle requirements. Put scheduling in the core only if essential semantics cannot
+      be expressed at that boundary. Benchmark complete runs before assuming parallelism solves
+      the bottleneck.
+    would_change_if: An adapter cannot preserve required fixture or cancellation semantics,
+      or integration costs exceed core ownership costs.
+  hub_fidelity:
+    domain: simulation_and_systems
+    prompt: Should an autonomous-truck hub simulator implement microscopic vehicle simulation
+      before DES?
+    classifications:
+    - decision
+    - design
+    - complex_system
+    context:
+    - 'Illustrative goal: compare hub layouts, resource capacity, and dispatch policies.'
+    - Discrete-event simulation (DES) tracks events, resources, and queues; vehicle-motion
+      detail is not yet required.
+    selected:
+      right_problem: Tie fidelity to layout and dispatch decisions.
+      constraints: Account for available data, model validation, and development budget.
+      variables: Define arrivals, service times, travel times, resources, and queue outputs.
+      simulation: Select the minimum dynamics needed to rank options.
+      cost_benefit: Compare DES-first, microscopic-first, and hybrid approaches.
+      sensitivity_analysis: Check whether travel-time or congestion assumptions reverse rankings.
+    artifacts:
+      criterion: Correctly rank feasible layout and policy options for queue delay and throughput.
+      variables:
+        outputs:
+        - throughput
+        - queue delay
+        - resource utilization
+        inputs:
+        - arrival process
+        - service-time distribution
+        - dispatch policy
+        - layout
+        controls:
+        - arrival scenario used across comparisons
+        possible_confounders:
+        - changes in load between model comparisons
+        latent:
+        - unmeasured driver or controller behavior
+      model_scope: Include queues, bays, chargers, travel-time assumptions, and resource contention;
+        initially exclude detailed trajectories.
+      alternatives:
+        DES_first: Quick capacity and queue analysis; approximated traffic conflicts may mis-rank
+          layouts.
+        microscopic_first: Resolves trajectories; requires motion data and greater validation
+          effort.
+        hybrid: DES resources plus detailed conflict zones; pays coupling and calibration
+          costs.
+      validation: Compare observable queues and resource timings with logs or controlled scenarios.
+      sensitivity: Vary travel times and conflict delays over supported ranges; report any
+        layout-ranking reversal.
+    answer: Build DES first for capacity and dispatch questions. Add microscopic detail where
+      congestion, collision avoidance, or maneuver timing changes the ranking. For controller
+      or safety questions, detailed motion may be required from the start.
+    would_change_if: The actual decision concerns motion safety, or supported conflict-delay
+      scenarios reverse the DES ranking.
+  feature_decision:
+    domain: product_strategy
+    prompt: Should we build feature X?
+    classifications:
+    - decision
+    - strategy
+    context:
+    - 'Illustrative facts: two enterprise prospects requested X.'
+    - Retention impact, willingness to pay, and support cost are unknown.
+    selected:
+      right_problem: Determine whether the objective is retention, acquisition, or revenue.
+      cost_benefit: Include development, support, and foregone roadmap work.
+      risk_uncertainty: Separate known implementation cost from unknown demand.
+      alternative_generation: Compare full build, concierge pilot, integration, and deferral.
+    artifacts:
+      problem: Choose the next investment that improves the specified commercial outcome.
+      facts:
+      - Two prospects requested X.
+      assumptions:
+      - Requests represent willingness to adopt and pay.
+      criteria:
+      - Retention or acquisition impact, as chosen by the product owner.
+      - Engineering capacity and support obligations.
+      alternatives:
+        full_build: Potential reusable product value; commits capacity before demand is established.
+        concierge_pilot: Tests use and value quickly; manual service may not scale.
+        integration: May reuse an existing product; creates dependency and pricing risk.
+        defer: Preserves roadmap capacity; may lose those prospects.
+      opportunity_cost: Name the roadmap item displaced by a full build.
+      next_evidence: Obtain commitments for a bounded pilot and observe repeated use.
+    answer: Run a bounded pilot if its cost is small relative to a full build and it can test
+      real adoption. Compare its outcome with the displaced roadmap work before committing.
+      Two requests establish interest, not broad demand.
+    would_change_if: Contractual commitments, repeated pilot use, or a low-cost integration
+      establishes a stronger return than the displaced work.
+  revenue_cause:
+    domain: causal_reasoning
+    prompt: Revenue increased after feature X was launched. Did X cause the increase?
+    classifications:
+    - causal
+    - research
+    context:
+    - 'Observed: aggregate revenue increased after launch.'
+    - Marketing, prices, customer mix, and seasonality were not controlled.
+    selected:
+      evidence_vs_inference: Separate the before-after observation from causal attribution.
+      variables: Define adoption, revenue, timing, and possible confounders.
+      correlation_causation: Require a counterfactual rather than temporal order.
+      research_design: Choose a comparison suited to rollout and selection conditions.
+    artifacts:
+      fact: Revenue rose after launch.
+      unsupported_inference: The launch caused all or part of the increase.
+      possible_confounders:
+      - campaign spend
+      - seasonality
+      - price changes
+      - customer acquisition mix
+      selection_risk: Adopters may already have higher revenue potential.
+      comparison: If feasible, randomize eligibility with compatible measurement and spillover
+        handling. Otherwise compare suitable cohorts and state identification assumptions.
+      limit: A before-after chart alone cannot isolate X; adjusted observational estimates
+        also require defensible assumptions.
+    answer: The timing is consistent with an effect, but does not establish one. Check concurrent
+      changes and compare equivalent eligible groups. A randomized rollout would give stronger
+      attribution; an observational design needs explicit assumptions about selection and
+      background trends.
+    would_change_if: A credible controlled comparison isolates a meaningful effect, or shows
+      that concurrent changes explain the increase.
+  productivity_study:
+    domain: research
+    prompt: Does technique A improve developer productivity?
+    classifications:
+    - research
+    - causal
+    - quantitative
+    context:
+    - No study results are supplied.
+    - The target developers, tasks, and productivity definition are unspecified.
+    selected:
+      testability: Define the claim and what would disconfirm it.
+      variables: Measure complete-task duration, correctness, and rework.
+      research_design: Plan experimental or observational comparisons, sampling, controls,
+        and replication.
+      statistics: Compare useful effect size with variation and uncertainty.
+    artifacts:
+      prediction: For a defined developer population and task mix, A reduces complete-task
+        time without worse correctness or rework.
+      variables:
+        output:
+        - time to an accepted correct result
+        - rework
+        - quality
+        input:
+        - technique A versus current workflow
+        controls:
+        - task difficulty
+        - tool access
+        - acceptance criteria
+        confounders:
+        - experience
+        - prior task familiarity
+        - learning and order effects
+      study: Use randomized assignment or counterbalanced task sets where learning spillover
+        can be controlled; otherwise explain the observational limits.
+      sampling: Recruit across the target experience range and task distribution rather than
+        only enthusiasts.
+      replication: Repeat across different tasks or teams and preserve task materials and
+        measurement rules.
+      analysis: Report complete-task effect sizes and intervals; predefine the smallest improvement
+        worth adoption.
+    answer: Define productivity as completing correct work, including rework. Test A on representative
+      tasks with a suitable comparison and controls for experience and order effects. Report
+      the effect and uncertainty against a practical adoption threshold; faster incomplete
+      work is not a productivity win.
+    would_change_if: Quality declines, gains vanish on representative tasks, or uncertainty
+      includes effects too small to justify adoption.
+  queue_optimization:
+    domain: complex_systems
+    prompt: Optimize truck dispatch to minimize mean hub waiting time.
+    classifications:
+    - optimization
+    - complex_system
+    - quantitative
+    context:
+    - 'Illustrative constraint: downstream gate and charger capacity are limited.'
+    - A lower hub mean could hide long-tail delays or transfer queues elsewhere.
+    selected:
+      goals: Check whether local mean waiting represents the real service objective.
+      variables: Separate dispatch choices, measured delays, and load.
+      constraints: Respect bays, chargers, safety rules, and delivery commitments.
+      optimization: Define a feasible objective rather than reward metric gaming.
+      system_boundaries: Track downstream queue displacement and feedback.
+      emergence: Explain congestion from interacting resource schedules.
+    artifacts:
+      objective: Reduce end-to-end delay subject to service reliability and capacity limits.
+      decision_variables:
+      - dispatch times
+      - route assignments
+      - charger scheduling
+      constraints:
+      - finite bay and charger capacity
+      - vehicle compatibility
+      - delivery commitments
+      proxy_failure: A locally fast dispatch policy may create downstream queues or starve
+        rare routes.
+      interactions: Synchronized departures can overload a gate; gate delays can block bays
+        and then alter dispatch availability.
+      levels: Vehicle schedules affect shared resource queues and fleet service outcomes.
+      comparison: Compare mean and tail delay, throughput, and fairness under identical demand
+        scenarios.
+    answer: Optimize end-to-end service delay with capacity and delivery constraints, then
+      compare tail delays and route service. Include the downstream gate and chargers in the
+      boundary. A policy that only lowers the hub mean by exporting queues does not improve
+      the stated service outcome.
+    would_change_if: The agreed scope truly excludes downstream performance, or measurements
+      show a different binding resource.
+  quantitative_capacity:
+    domain: quantitative_reasoning
+    prompt: Service takes roughly 10–15 minutes per truck. Can three bays sustain 30 trucks per hour?
+    classifications:
+    - quantitative
+    - prediction
+    context:
+    - 'Illustrative assumption: service stays within 10–15 minutes; each independent bay handles one
+      truck at a time.'
+    - Arrival variability and downtime are unknown.
+    selected:
+      estimation: Compute an upper bound before discussing utilization.
+    artifacts:
+      bound: Ideal capacity ranges from about 12 to 18 trucks per hour across three bays; even the optimistic
+        bound is below 30.
+      uncertainty: Downtime can lower capacity; an arrival rate below service capacity is also needed
+        to avoid sustained queue growth.
+    answer: No under those service assumptions. Even at 10 minutes per truck, three bays provide at
+      most 18 trucks per hour. At 15 minutes, ideal capacity is 12. Downtime can reduce it further.
+    would_change_if: The stated service time, number of simultaneous service positions, or operating
+      arrangement changes.
+  supplier_agreement:
+    domain: negotiation
+    prompt: Our vendor wants a three-year renewal. What terms should we negotiate?
+    classifications:
+    - negotiation
+    - decision
+    context:
+    - 'Illustrative facts: a one-year extension is available; switching requires migration
+      work.'
+    - Future volume and the substitute vendor's delivered cost are uncertain.
+    selected:
+      negotiation: Separate continuity and revenue interests from contract positions.
+      batna: Verify the one-year extension and realistic migration alternative.
+      constraints: Check authority, deadlines, and migration dependencies.
+      cost_benefit: Compare packages across price, lock-in, service, and exit costs.
+    artifacts:
+      interests:
+        buyer: Continuity with price and exit flexibility.
+        vendor: Predictable revenue and commitment.
+      outside_option: Verified one-year extension, evaluated with migration and later price
+        risk.
+      packages:
+      - Three years with price caps and explicit exit rights.
+      - One year with a priced renewal option.
+      - Staged volume commitment with service milestones.
+      reservation: Reject a package worse than the feasible extension after switching costs
+        and service risk.
+      next_evidence: Confirm substitute migration cost and contract exit enforceability with
+        the responsible specialists.
+    answer: Compare a capped three-year agreement, a one-year extension, and a staged commitment
+      against your verified outside option. Trade duration for price protection or exit rights
+      only when the package improves your priorities. Set the walk-away condition before discussing
+      concessions.
+    would_change_if: The extension expires, migration cost changes, or a substitute becomes
+      a verified better option.
+  public_explanation:
+    domain: communication
+    prompt: Explain an uncertain model forecast to nontechnical city planners.
+    classifications:
+    - communication
+    context:
+    - The forecast has scenarios rather than calibrated probabilities.
+    - The planners need to choose a capacity investment.
+    selected:
+      audience_design: Organize the message around the planners' decision and evidence needs.
+      composition: State the consequence clearly and remove unnecessary terms.
+      multimodal_design: Show scenario differences without implying false probabilistic precision.
+    artifacts:
+      thesis: The capacity choice depends on which supported demand scenario occurs.
+      presentation: Use a clearly labeled scenario comparison with units, assumptions, and
+        the decision threshold.
+      wording: Explain that scenario ranges are conditional outcomes rather than confidence
+        intervals.
+    answer: Show the capacity threshold and the scenarios that cross it. Label each scenario's
+      assumptions and explain what measurement would narrow the choice. Avoid assigning probabilities
+      that the model cannot support.
+    would_change_if: The audience needs a different decision, or calibrated probability estimates
+      become available.
+  allocation_ethics:
+    domain: ethical_decision
+    prompt: Should we allocate all training funds to our highest-performing team?
+    classifications:
+    - ethical
+    - decision
+    context:
+    - The highest-performing team has a credible short-term productivity gain.
+    - Other teams have fewer prior training opportunities and unmet skill needs.
+    selected:
+      ethical_framing: Identify opportunity, fairness, and productivity concerns.
+      ethical_conflicts: Compare contextual reasons for prioritizing different principles.
+      cost_benefit: Compare consequences for each team rather than only aggregate output.
+    artifacts:
+      principles:
+      - Improve organizational output.
+      - Provide fair access to development.
+      alternatives:
+      - All funds to the leading team.
+      - Minimum access for each team plus targeted investment.
+      - A time-bounded rotation with measured outcomes.
+      tradeoff: A minimum allocation can reduce short-term gain while addressing unequal opportunity.
+      criterion: State the organization's obligations and evidence for returns before choosing
+        the allocation.
+    answer: Compare a minimum-access allocation plus targeted investment with concentrating
+      all funds. The larger immediate return does not settle the fairness question. State
+      which obligation takes priority, why, and how excluded teams will receive development
+      opportunities.
+    would_change_if: A binding obligation or stronger evidence about benefits and unequal
+      opportunity changes the balance.
+  bad_name_dropping:
+    domain: software_engineering
+    prompt: Should we build parallelism into the core?
+    classifications:
+    - decision
+    - design
+    context:
+    - No performance, lifecycle, or ownership evidence is supplied.
+    selected:
+      right_problem: Claimed but not applied.
+      constraints: Claimed but not applied.
+      cost_benefit: Claimed but not applied.
+    bad_answer: 'Using #rightproblem, #constraints, and #utility, add parallelism because
+      it is faster.'
+    failure:
+    - No outcome criterion or constraint was identified.
+    - No alternative, ownership boundary, or measurement supports the recommendation.
+    repair: Define throughput and semantic requirements, compare executor ownership options,
+      and identify evidence that distinguishes them.
+    related_example: software_parallel
+  cache_mechanism:
+    domain: software_engineering
+    prompt: Will caching frontend views eliminate database writes?
+    classifications:
+    - diagnostic
+    - explanatory
+    context:
+    - 'Illustrative architecture: the cache serves rendered views only.'
+    - The client still submits every write; server and database write paths are unchanged.
+    selected:
+      plausibility: Check whether the proposed change has a mechanism that alters the claimed outcome.
+    artifacts:
+      proposed_mechanism: A cached view can avoid rendering work.
+      necessary_premise: Eliminating database writes requires changing which writes reach or execute
+        on the server.
+      premise_check: The supplied architecture leaves write requests and execution unchanged.
+      test: Count write requests and database operations separately from rendering time.
+    answer: Caching rendered views does not eliminate writes when every write request still reaches
+      the unchanged server path. It may help rendering, but a write reduction needs a separate mechanism
+      and measurement.
+    would_change_if: The design includes verified write coalescing or another change to write submission
+      or execution.

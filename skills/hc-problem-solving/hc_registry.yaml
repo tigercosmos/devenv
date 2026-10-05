@@ -1,0 +1,1750 @@
+# Operations, summaries, categories, and runtime roles are AI adaptations.
+# Only non-null official_name values are verified official HC labels.
+schema_version: 1
+baseline: dlo2017
+sources:
+  dlo2017:
+    document: Extraordinary Student Achievement / Degree Learning Objectives
+    version: '2017'
+    url: https://www.minerva.edu/public/media/enrollment-center/Minerva-Student-Achievement-2017.pdf
+    sha256: 4679df28ec3235779cce5e9fd3b061203a66a8539965edd1b9c0f78ec8895bf4
+  intro2017:
+    document: An Introduction to Habits of Mind and Foundational Concepts
+    version: Undated printed edition; PDF metadata created 2017-03-10
+    url: https://www.minerva.edu/public/media/enrollment-center/Minerva-HCs-Intro.pdf
+    sha256: 07e56ff3aec9df421f304dfef3b9ea48be53154984369f2ad2a92cb5a4ec7d66
+source_objectives:
+  dlo_framing:
+    document: dlo2017
+    location: p. 5, Analyzing Problems, bullets 1-2
+    summary: Gaps and problem characterization
+  dlo_decomposition:
+    document: dlo2017
+    location: p. 5, Analyzing Problems, bullets 3
+    summary: Tractable components and solution design
+  dlo_variables:
+    document: dlo2017
+    location: p. 5, Analyzing Problems, bullets 5
+    summary: Dependent and independent variables
+  dlo_interpretation:
+    document: dlo2017
+    location: p. 4, Evaluating Claims, bullets 3-4
+    summary: Prior experience in inference; scientific hypotheses, theories, facts, and laws
+  dlo_justifications:
+    document: dlo2017
+    location: p. 4, Evaluating Justifications, bullets 1
+    summary: Information needed to support arguments
+  dlo_premises:
+    document: dlo2017
+    location: p. 4, Evaluating Claims, bullets 7
+    summary: Plausible premises and assumptions
+  dlo_sources:
+    document: dlo2017
+    location: p. 4, Evaluating Justifications, bullets 2
+    summary: Information categories and source quality
+  dlo_testability:
+    document: dlo2017
+    location: p. 4, Evaluating Claims, bullets 8
+    summary: Testable predictions
+  dlo_deduction:
+    document: dlo2017
+    location: p. 4, Evaluating Justifications, bullets 4
+    summary: Deductive logic
+  dlo_fallacies:
+    document: dlo2017
+    location: p. 4, Evaluating Justifications, bullets 6
+    summary: Logical fallacy identification and correction
+  dlo_probability:
+    document: dlo2017
+    location: p. 4, Analyzing Data, bullets 1
+    summary: Probability, conditional probability, and Bayesian probability
+  dlo_data:
+    document: dlo2017
+    location: p. 4, Analyzing Data, bullets 2-7
+    summary: Distributions, statistics, intervals, correlation, regression, and significance
+  dlo_correlation:
+    document: dlo2017
+    location: p. 4, Analyzing Data, bullets 5
+    summary: Correlation measures and correlation versus causation
+  dlo_significance:
+    document: dlo2017
+    location: p. 4, Analyzing Data, bullets 7
+    summary: Practical and statistical significance
+  dlo_goals:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 1-2
+    summary: Motives, goals, values, and guiding principles
+  dlo_costs:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 3
+    summary: Stakeholder costs and benefits
+  dlo_bias:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 4-6
+    summary: Psychological bias, confirmation, and heuristic errors
+  dlo_sunk_costs:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 7
+    summary: Effects of sunk costs in decisions
+  dlo_time_preferences:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 8
+    summary: Effects of temporal discounting in decisions
+  dlo_risk:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 9
+    summary: Risk versus uncertainty
+  dlo_choices:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 10
+    summary: Multiple choices considered simultaneously
+  dlo_trees:
+    document: dlo2017
+    location: p. 5, Analyzing Decisions, bullets 11
+    summary: Decision trees and consequences of alternative choices
+  dlo_discovery:
+    document: dlo2017
+    location: p. 5, Facilitating Discovery, bullets 1-2
+    summary: Initial data, hypothesis-driven research, and theory-guided study design
+  dlo_models:
+    document: dlo2017
+    location: p. 5, Facilitating Discovery, bullets 3
+    summary: Models explain data and generate predictions
+  dlo_methods:
+    document: dlo2017
+    location: p. 6, Applying Research Methods, bullets 1-7
+    summary: Experiments, observations, interviews, surveys, cases, replication, controls, and sampling
+  dlo_controls:
+    document: dlo2017
+    location: p. 6, Applying Research Methods, bullets 6
+    summary: Controls in empirical study design
+  dlo_analogy:
+    document: dlo2017
+    location: p. 6, Solving Problems, bullets 1
+    summary: Appropriate analogy use
+  dlo_creative_heuristics:
+    document: dlo2017
+    location: p. 6, Solving Problems, bullets 3
+    summary: Heuristics for creative solutions and products
+  dlo_efficient_heuristics:
+    document: dlo2017
+    location: p. 6, Solving Problems, bullets 5
+    summary: Heuristics for efficient decisions and problem solving
+  dlo_algorithms:
+    document: dlo2017
+    location: p. 6, Solving Problems, bullets 6
+    summary: Algorithmic thinking and working code
+  dlo_simulation:
+    document: dlo2017
+    location: p. 6, Solving Problems, bullets 7
+    summary: Simulation modeling
+  dlo_optimization:
+    document: dlo2017
+    location: p. 6, Solving Problems, bullets 8
+    summary: Optimization techniques
+  dlo_language:
+    document: dlo2017
+    location: p. 6, Using Language, bullets 1-2
+    summary: Thesis and communication organization
+  dlo_nonverbal:
+    document: dlo2017
+    location: p. 7, Using Nonverbal Communication, bullets 1
+    summary: Body language and facial expression
+  dlo_systems:
+    document: dlo2017
+    location: p. 7, Interacting Within Complex Systems, bullets 1-2
+    summary: System decomposition and interactions across levels
+  dlo_levels:
+    document: dlo2017
+    location: p. 7, Interacting Within Complex Systems, bullets 2
+    summary: Interactions at different levels of analysis
+  dlo_emergence:
+    document: dlo2017
+    location: p. 7, Interacting Within Complex Systems, bullets 3
+    summary: Emergent properties and their causes
+  dlo_multiple_causes:
+    document: dlo2017
+    location: p. 7, Interacting Within Complex Systems, bullets 4
+    summary: Interacting causes and complex effects
+  dlo_network:
+    document: dlo2017
+    location: p. 7, Interacting Within Complex Systems, bullets 5
+    summary: Network structure and interactions
+  dlo_system_sensitivity:
+    document: dlo2017
+    location: p. 7, Interacting Within Complex Systems, bullets 6
+    summary: Attractors and sensitivity to varying conditions in complex systems
+  dlo_negotiation:
+    document: dlo2017
+    location: p. 7, Negotiating and Persuading, bullets 1-3
+    summary: Structured negotiation, multidimensional BATNAs, and common ground
+  dlo_batna:
+    document: dlo2017
+    location: p. 7, Negotiating and Persuading, bullets 2
+    summary: Multidimensional Best Alternatives to a Negotiated Agreement
+  dlo_persuasion:
+    document: dlo2017
+    location: p. 7, Negotiating and Persuading, bullets 4-8
+    summary: Choice architecture, reinforcement, cognitive and emotional tools, and confidence
+  dlo_leadership:
+    document: dlo2017
+    location: p. 8, Working With Others, bullets 1-3
+    summary: Leadership, power, position assessment, and plans
+  dlo_groups:
+    document: dlo2017
+    location: p. 8, Working With Others, bullets 5-6
+    summary: Conformity and organizational structure
+  dlo_self:
+    document: dlo2017
+    location: p. 8, Working With Others, bullets 7-9
+    summary: Self-awareness, emotional intelligence, and responsibility
+  dlo_fairness:
+    document: dlo2017
+    location: p. 8, Resolving Ethical Problems, bullets 1
+    summary: Unfair outcomes and practices
+  dlo_ethics:
+    document: dlo2017
+    location: p. 8, Resolving Ethical Problems, bullets 3
+    summary: Contextual resolution of conflicts among ethical principles
+  dlo_audience:
+    document: dlo2017
+    location: p. 6, Using Language, bullets 4-6
+    summary: Professionalism, connotation, tone, and recipient perspective
+  dlo_visualization:
+    document: dlo2017
+    location: p. 5, Facilitating Discovery, bullets 4
+    summary: Interpretation, analysis, and creation of data visualizations
+groups:
+  problem_framing:
+    right_problem:
+      implementation_name: right_problem
+      official_name: null
+      type: derived
+      runtime_role: check
+      competency: thinking_critically
+      aliases:
+      - gap_analysis
+      derived_from:
+      - dlo_framing
+      - dlo_goals
+      purpose: Align the stated task with the outcome that matters.
+      use_when:
+      - diagnostic
+      - decision
+      - design
+      - optimization
+      - strategy
+      triggers:
+      - The prompt prescribes a solution before defining success.
+      avoid_when:
+      - A clear, simple request already specifies the desired result.
+      questions:
+      - Would solving the stated question achieve the desired outcome?
+      operation:
+      - Distinguish the stated problem, underlying problem, desired outcome, and decision criterion.
+      - Compare the current and desired states; identify the binding gap.
+      expected_output:
+      - A corrected problem statement and measurable success criterion.
+      anti_patterns:
+      - Replacing the user's goal with an invented objective.
+      related_hcs:
+      - goals
+      - decomposition
+      example_refs:
+      - software_parallel
+      - hub_fidelity
+      - feature_decision
+    decomposition:
+      implementation_name: decomposition
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_decomposition
+      purpose: Separate tractable work while preserving dependencies.
+      use_when:
+      - diagnostic
+      - design
+      - research
+      - strategy
+      triggers:
+      - The problem contains coupled responsibilities or unknowns.
+      avoid_when:
+      - A split adds bookkeeping without changing the answer.
+      questions:
+      - Which parts can be solved independently, and which share an interface?
+      operation:
+      - Partition by responsibility, evidence need, or timescale.
+      - Record dependencies, shared state, and integration obligations.
+      expected_output:
+      - Subproblems with owners or interfaces and a dependency map.
+      anti_patterns:
+      - Splitting until the interactions disappear.
+      related_hcs:
+      - system_boundaries
+      - constraints
+      example_refs:
+      - software_parallel
+    variables:
+      implementation_name: variables
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_variables
+      - dlo_controls
+      purpose: Define the quantities a claim or model depends on.
+      use_when:
+      - causal
+      - prediction
+      - quantitative
+      - research
+      - optimization
+      - complex_system
+      - diagnostic
+      triggers:
+      - A metric, causal effect, or controllable input needs a precise meaning.
+      avoid_when:
+      - No variable distinction would change the analysis.
+      questions:
+      - What is measured, manipulated, held constant, or omitted?
+      operation:
+      - Define outputs, inputs, controls, possible confounders, and latent factors.
+      - Specify units, timing, measurement method, and which inputs are actually controllable.
+      expected_output:
+      - A variable table with roles and measurement definitions.
+      anti_patterns:
+      - Treating every input as a manipulable cause.
+      related_hcs:
+      - correlation_causation
+      - optimization
+      example_refs:
+      - hub_fidelity
+      - revenue_cause
+      - productivity_study
+      - queue_optimization
+  evidence:
+    evidence_vs_inference:
+      implementation_name: evidence_vs_inference
+      official_name: null
+      type: derived
+      runtime_role: check
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_interpretation
+      - dlo_justifications
+      purpose: Keep observation and interpretation distinguishable.
+      use_when:
+      - explanatory
+      - diagnostic
+      - causal
+      - research
+      - decision
+      triggers:
+      - A conclusion is stronger than the supplied evidence.
+      avoid_when:
+      - An ordinary supported fact needs no evidence ledger.
+      questions:
+      - Which claims are observations, assumptions, or interpretations?
+      operation:
+      - Label consequential facts with their evidence; separate assumptions and inferences.
+      - Qualify unsupported conclusions and identify the missing evidence.
+      expected_output:
+      - A compact evidence ledger with confidence limits.
+      anti_patterns:
+      - Calling an inferred explanation a measured fact.
+      related_hcs:
+      - source_quality
+      - assumption_check
+      example_refs:
+      - revenue_cause
+    assumption_check:
+      implementation_name: assumption_check
+      official_name: null
+      type: derived
+      runtime_role: check
+      competency: thinking_critically
+      aliases:
+      - assumptions
+      derived_from:
+      - dlo_premises
+      - dlo_risk
+      purpose: Find the assumption whose failure changes the answer.
+      use_when:
+      - diagnostic
+      - prediction
+      - decision
+      - design
+      - strategy
+      triggers:
+      - A recommendation depends on missing or disputed premises.
+      avoid_when:
+      - No material premise is uncertain.
+      questions:
+      - Which assumption has both high uncertainty and high decision impact?
+      operation:
+      - List only assumptions that could reverse the conclusion.
+      - Rank by uncertainty and consequence; propose a discriminating check.
+      expected_output:
+      - A critical assumption and the highest-value check.
+      anti_patterns:
+      - An exhaustive inventory of trivial assumptions.
+      related_hcs:
+      - sensitivity_analysis
+      - testability
+      example_refs: []
+    plausibility:
+      implementation_name: plausibility
+      official_name: null
+      type: derived
+      runtime_role: check
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_premises
+      purpose: Check whether a hypothesis has defensible premises.
+      use_when:
+      - explanatory
+      - diagnostic
+      - causal
+      - research
+      triggers:
+      - An explanation conflicts with established mechanisms or boundary conditions.
+      avoid_when:
+      - Plausibility is being used instead of testing an unfamiliar but possible claim.
+      questions:
+      - What mechanism makes this possible under these conditions?
+      operation:
+      - Identify the proposed mechanism and its necessary premises.
+      - Compare with established constraints; retain plausible competing hypotheses.
+      expected_output:
+      - A mechanism with premises that need verification.
+      anti_patterns:
+      - Rejecting a claim merely because it is unfamiliar.
+      related_hcs:
+      - estimation
+      - testability
+      example_refs:
+      - cache_mechanism
+    source_quality:
+      implementation_name: source_quality
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_sources
+      purpose: Weight evidence by its fitness for this claim.
+      use_when:
+      - factual
+      - explanatory
+      - research
+      - decision
+      triggers:
+      - Sources disagree, or credibility and scope affect the answer.
+      avoid_when:
+      - The answer is already established by adequate direct evidence.
+      questions:
+      - Can this source observe or establish the claim in this context?
+      operation:
+      - Check provenance, method, date, incentives, and applicability.
+      - Distinguish independent corroboration from repeated reporting.
+      expected_output:
+      - Evidence ranked by reliability and relevance.
+      anti_patterns:
+      - Treating prestige or citation count as proof.
+      related_hcs:
+      - evidence_vs_inference
+      - research_design
+      example_refs: []
+    testability:
+      implementation_name: testability
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_testability
+      - dlo_discovery
+      purpose: Turn a claim into a prediction that could fail.
+      use_when:
+      - research
+      - causal
+      - diagnostic
+      - prediction
+      triggers:
+      - A claim cannot yet be distinguished from alternatives.
+      avoid_when:
+      - The task is a normative value choice rather than an empirical claim.
+      questions:
+      - What observable result would count against this claim?
+      operation:
+      - State a measurable prediction with population, conditions, and time horizon.
+      - Define the contrary result and a feasible comparison.
+      expected_output:
+      - A falsifiable prediction and disconfirming observation.
+      anti_patterns:
+      - Changing the claim after each contrary result.
+      related_hcs:
+      - research_design
+      - variables
+      example_refs:
+      - productivity_study
+  logic:
+    deduction:
+      implementation_name: deduction
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases:
+      - fallacies
+      derived_from:
+      - dlo_deduction
+      - dlo_fallacies
+      purpose: Test whether a conclusion follows from its premises.
+      use_when:
+      - explanatory
+      - diagnostic
+      - quantitative
+      - ethical
+      triggers:
+      - An argument claims necessity or contains a logical leap.
+      avoid_when:
+      - An empirical generalization needs sampling evidence instead.
+      questions:
+      - Could all premises hold while the conclusion is false?
+      operation:
+      - Represent the premises and implication without rhetorical language.
+      - Test a counterexample; identify fallacies and independently check premise truth.
+      expected_output:
+      - A valid conditional conclusion or a concrete counterexample.
+      anti_patterns:
+      - Confusing a valid argument with true premises.
+      related_hcs:
+      - induction
+      - evidence_vs_inference
+      example_refs: []
+    induction:
+      implementation_name: induction
+      official_name: '#induction'
+      type: concept
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 6
+      purpose: Find competing generalizations supported by observations.
+      use_when:
+      - explanatory
+      - diagnostic
+      - prediction
+      - research
+      triggers:
+      - A few examples appear to establish a general rule.
+      avoid_when:
+      - A deductive proof or exhaustive enumeration already settles the claim.
+      questions:
+      - Which other generalizations also fit these observations?
+      operation:
+      - Construct at least two plausible explanations of the observed pattern.
+      - Deduce a differing prediction and seek a distinguishing observation.
+      expected_output:
+      - Tentative generalizations and a discriminating prediction.
+      anti_patterns:
+      - Treating repeated examples as a guarantee.
+      related_hcs:
+      - deduction
+      - testability
+      example_refs: []
+  quantitative_reasoning:
+    estimation:
+      implementation_name: estimation
+      official_name: '#estimation'
+      type: habit
+      runtime_role: check
+      competency: thinking_critically
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 5
+      purpose: Check quantitative claims against approximate bounds.
+      use_when:
+      - quantitative
+      - prediction
+      - optimization
+      triggers:
+      - A number seems precise, large, small, or physically constrained.
+      avoid_when:
+      - Exact calculation is trivial and no sanity check adds value.
+      questions:
+      - Do the units and scale fit feasible bounds?
+      operation:
+      - Use round numbers, dimensions, base rates, and minimum or maximum bounds.
+      - Compare the claimed value with the approximate result.
+      expected_output:
+      - An order of magnitude or range and a discrepancy if present.
+      anti_patterns:
+      - Reporting rough estimates with exact-looking precision.
+      related_hcs:
+      - statistics
+      - probability
+      example_refs:
+      - quantitative_capacity
+    probability:
+      implementation_name: probability
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_probability
+      purpose: Update uncertainty using defensible probabilistic evidence.
+      use_when:
+      - prediction
+      - decision
+      - quantitative
+      - research
+      triggers:
+      - Base rates or conditional evidence change the conclusion.
+      avoid_when:
+      - Probabilities are unidentifiable and scenarios are more honest.
+      questions:
+      - What base rate and likelihood support this update?
+      operation:
+      - Define events, conditioning, and the reference population.
+      - Update with defensible likelihoods; otherwise retain ranges or qualitative uncertainty.
+      expected_output:
+      - An interpretable probability or explicit bounds on what is unknown.
+      anti_patterns:
+      - Inventing numerical probabilities to fill a decision table.
+      related_hcs:
+      - risk_uncertainty
+      - statistics
+      example_refs: []
+    statistics:
+      implementation_name: statistics
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases:
+      - distributions
+      - regression
+      - practical_significance
+      - statistical_significance
+      derived_from:
+      - dlo_data
+      purpose: Describe variation and distinguish detection from useful effect.
+      use_when:
+      - quantitative
+      - research
+      - prediction
+      triggers:
+      - A mean, trend, regression, or significance claim guides a decision.
+      avoid_when:
+      - No data or defensible model supports the calculation.
+      questions:
+      - How large is the effect relative to variation and the useful threshold?
+      operation:
+      - Inspect distributions, sample sizes, outliers, units, and appropriate summaries.
+      - Separate effect size, interval uncertainty, statistical significance, and practical significance;
+        check model assumptions.
+      expected_output:
+      - An effect with uncertainty and a decision-relevant threshold.
+      anti_patterns:
+      - Treating significance as effect size or regression as causal identification.
+      related_hcs:
+      - variables
+      - research_design
+      example_refs:
+      - productivity_study
+  causal_reasoning:
+    correlation_causation:
+      implementation_name: correlation_causation
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases:
+      - confounders
+      derived_from:
+      - dlo_correlation
+      - dlo_methods
+      - dlo_variables
+      purpose: Assess whether association identifies a causal effect.
+      use_when:
+      - causal
+      - diagnostic
+      - research
+      triggers:
+      - An outcome changed after an intervention or differs between groups.
+      avoid_when:
+      - The request only describes an association without a causal claim.
+      questions:
+      - What counterfactual comparison would isolate the intervention?
+      operation:
+      - Identify reverse causation, confounders, selection effects, and concurrent changes.
+      - Assess randomization or explicit identification assumptions; propose a defensible comparison.
+      expected_output:
+      - A bounded causal claim and evidence needed to distinguish causes.
+      anti_patterns:
+      - Assuming temporal sequence, adjustment, or correlation proves causation.
+      related_hcs:
+      - variables
+      - research_design
+      example_refs:
+      - revenue_cause
+  decision_making:
+    goals:
+      implementation_name: goals
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_goals
+      purpose: Make trade-offs depend on the actual values and outcome.
+      use_when:
+      - decision
+      - optimization
+      - strategy
+      - ethical
+      triggers:
+      - People disagree about what success means.
+      avoid_when:
+      - The objective is already clear and uncontested.
+      questions:
+      - Whose goals determine the criterion, and which values conflict?
+      operation:
+      - Separate outcomes, proxy metrics, values, and guiding principles.
+      - Define evaluation criteria and surface stakeholder conflicts.
+      expected_output:
+      - An outcome criterion with explicit value trade-offs.
+      anti_patterns:
+      - Silently optimizing a convenient proxy.
+      related_hcs:
+      - cost_benefit
+      - ethical_conflicts
+      example_refs:
+      - queue_optimization
+    cost_benefit:
+      implementation_name: cost_benefit
+      official_name: '#utility'
+      type: habit
+      runtime_role: check
+      competency: thinking_critically
+      aliases:
+      - opportunity_cost
+      - sunk_cost
+      - temporal_discounting
+      source:
+        document: intro2017
+        location: p. 7
+      purpose: Compare future consequences for affected stakeholders.
+      use_when:
+      - decision
+      - design
+      - optimization
+      - strategy
+      - negotiation
+      - ethical
+      triggers:
+      - Options trade resources or distribute benefits unevenly.
+      avoid_when:
+      - A strict constraint already determines the only feasible option.
+      questions:
+      - What changes for each stakeholder if this option is chosen?
+      operation:
+      - Compare future benefits, direct costs, externalities, and foregone opportunities by stakeholder
+        and time horizon.
+      - Separate recoverable switching costs from sunk costs; make time preferences and value judgments
+        explicit.
+      expected_output:
+      - A comparable consequence table with opportunity costs and distributional effects.
+      anti_patterns:
+      - Counting past spending as a future benefit or summing incompatible values.
+      related_hcs:
+      - goals
+      - risk_uncertainty
+      example_refs:
+      - software_parallel
+      - hub_fidelity
+      - feature_decision
+      - supplier_agreement
+      - allocation_ethics
+      supporting_objectives:
+      - dlo_costs
+      - dlo_sunk_costs
+      - dlo_time_preferences
+    bias_check:
+      implementation_name: bias_check
+      official_name: null
+      type: derived
+      runtime_role: check
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_bias
+      - dlo_sunk_costs
+      purpose: Challenge anchoring and one-sided evidence selection.
+      use_when:
+      - decision
+      - diagnostic
+      - strategy
+      - research
+      triggers:
+      - The prompt favors a solution or cites prior investment.
+      avoid_when:
+      - No plausible bias would change the evidence or decision.
+      questions:
+      - What would a credible critic choose or measure differently?
+      operation:
+      - Look for confirmation, availability, anchoring, and sunk-cost pressure.
+      - Apply equal standards to the favored option and its strongest rival.
+      expected_output:
+      - A challenged premise or a fair comparison.
+      anti_patterns:
+      - Listing bias names without changing the analysis.
+      related_hcs:
+      - alternative_generation
+      - assumption_check
+      example_refs: []
+    risk_uncertainty:
+      implementation_name: risk_uncertainty
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_risk
+      purpose: Separate estimable risks from poorly characterized outcomes.
+      use_when:
+      - decision
+      - prediction
+      - design
+      - strategy
+      triggers:
+      - Failure consequences or weak evidence affect commitment.
+      avoid_when:
+      - No consequential uncertainty remains.
+      questions:
+      - What can be estimated, and what remains poorly characterized?
+      operation:
+      - Separate known hazards with supported probabilities from unknown probabilities or outcomes.
+      - Compare downside, reversibility, mitigations, and assumption dependence without fabricated precision.
+      expected_output:
+      - A risk and uncertainty summary with a reversible next step when useful.
+      anti_patterns:
+      - Collapsing all uncertainty into an invented expected value.
+      related_hcs:
+      - sensitivity_analysis
+      - decision_tree
+      example_refs:
+      - feature_decision
+    decision_tree:
+      implementation_name: decision_tree
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases: []
+      derived_from:
+      - dlo_trees
+      purpose: Compare sequential choices and information gained before commitment.
+      use_when:
+      - decision
+      - strategy
+      - research
+      triggers:
+      - Later choices depend on outcomes or new evidence.
+      avoid_when:
+      - A single-stage comparison is sufficient.
+      questions:
+      - Which choice can wait until information becomes available?
+      operation:
+      - Represent decision nodes, outcome branches, and consequences.
+      - Use supported probabilities only; compare staged options and information-gathering cost.
+      expected_output:
+      - A small decision tree with branch conditions.
+      anti_patterns:
+      - A large tree with invented probabilities.
+      related_hcs:
+      - alternative_generation
+      - risk_uncertainty
+      example_refs: []
+    alternative_generation:
+      implementation_name: alternative_generation
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_critically
+      aliases:
+      - alternatives
+      derived_from:
+      - dlo_choices
+      - dlo_creative_heuristics
+      purpose: Escape a false binary or premature commitment.
+      use_when:
+      - decision
+      - design
+      - optimization
+      - strategy
+      - negotiation
+      triggers:
+      - Only the proposed option is evaluated.
+      avoid_when:
+      - A hard constraint genuinely permits only one option.
+      questions:
+      - What credible option uses a different mechanism or commitment level?
+      operation:
+      - Include the status quo when feasible and at least one distinct mechanism or staged option.
+      - Compare benefits, costs, constraints, risks, assumptions, and consequences; remove only defensibly
+        dominated options.
+      expected_output:
+      - A short set of viable alternatives with decisive trade-offs.
+      anti_patterns:
+      - Straw-man alternatives added to justify the preferred solution.
+      related_hcs:
+      - cost_benefit
+      - constraints
+      example_refs:
+      - software_parallel
+      - feature_decision
+  problem_solving:
+    constraints:
+      implementation_name: constraints
+      official_name: '#constraints'
+      type: concept
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 10
+      purpose: Prune infeasible solutions and identify negotiable limits.
+      use_when:
+      - decision
+      - design
+      - optimization
+      - strategy
+      - negotiation
+      triggers:
+      - Requirements or resource limits define feasibility.
+      avoid_when:
+      - Constraints do not distinguish plausible answers.
+      questions:
+      - Which limits are hard, soft, negotiable, conflicting, or derived?
+      operation:
+      - Classify constraints and record their evidence, owner, and conditions.
+      - Propagate constraints to options; check conflicts before optimizing preferences.
+      expected_output:
+      - A constraint table and a feasible solution set.
+      anti_patterns:
+      - Treating assumptions as immutable limits.
+      related_hcs:
+      - right_problem
+      - optimization
+      example_refs:
+      - software_parallel
+      - hub_fidelity
+      - queue_optimization
+      - supplier_agreement
+    model_types:
+      implementation_name: model_types
+      official_name: '#modeltypes'
+      type: concept
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 9
+      purpose: Choose a representation that supports the intended inference.
+      use_when:
+      - explanatory
+      - prediction
+      - design
+      - complex_system
+      - research
+      triggers:
+      - The proposed representation may omit decisive behavior.
+      avoid_when:
+      - A direct observation answers the question without a model.
+      questions:
+      - What decision or prediction must this model support?
+      operation:
+      - Compare conceptual, mathematical, physical, and simulation representations against
+        the required outputs.
+      - State assumptions, resolution, data requirements, and a validation target.
+      expected_output:
+      - A model choice with scope and testable predictions.
+      anti_patterns:
+      - Equating detail with validity.
+      related_hcs:
+      - simulation
+      - variables
+      example_refs: []
+    analogy:
+      implementation_name: analogy
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases: []
+      derived_from:
+      - dlo_analogy
+      purpose: Transfer a useful relationship without importing irrelevant details.
+      use_when:
+      - design
+      - diagnostic
+      - strategy
+      triggers:
+      - A known solution may fit a new domain.
+      avoid_when:
+      - The proposed similarity is only superficial.
+      questions:
+      - Which relationship transfers, and where does it break?
+      operation:
+      - Map relevant relationships between the source and target cases.
+      - Identify differences and test the transferred hypothesis.
+      expected_output:
+      - A candidate solution with transfer limits.
+      anti_patterns:
+      - Using resemblance as proof.
+      related_hcs:
+      - testability
+      - decomposition
+      example_refs: []
+    simulation:
+      implementation_name: simulation
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases: []
+      derived_from:
+      - dlo_simulation
+      - dlo_models
+      purpose: Explore dynamics when direct analysis is insufficient.
+      use_when:
+      - prediction
+      - design
+      - optimization
+      - complex_system
+      triggers:
+      - Interactions, stochasticity, or timing affect the decision.
+      avoid_when:
+      - A simple calculation or observation answers the decision.
+      questions:
+      - What minimum fidelity preserves the decision-relevant interactions?
+      operation:
+      - Define question, inputs, outputs, resolution, and validation evidence before choosing a simulator.
+      - Compare model predictions against observations or simpler models; report sensitivity and limits.
+      expected_output:
+      - A minimum useful simulation and validation plan.
+      anti_patterns:
+      - Treating a simulation output as evidence about reality without validation.
+      related_hcs:
+      - model_types
+      - variables
+      - sensitivity_analysis
+      example_refs:
+      - hub_fidelity
+    optimization:
+      implementation_name: optimization
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases: []
+      derived_from:
+      - dlo_optimization
+      - dlo_goals
+      purpose: Improve a real objective within a feasible decision space.
+      use_when:
+      - optimization
+      - design
+      - quantitative
+      triggers:
+      - Controllable choices trade a measurable outcome against constraints.
+      avoid_when:
+      - The true objective or feasible choices cannot yet be specified.
+      questions:
+      - What is the objective, and how could its proxy be gamed?
+      operation:
+      - Define objective, decision variables, constraints, and proxy failure modes.
+      - Compare feasible candidates and test robustness or multiple objectives before recommending a method.
+      expected_output:
+      - An optimization formulation and a justified candidate.
+      anti_patterns:
+      - Optimizing a proxy while degrading the actual outcome.
+      related_hcs:
+      - goals
+      - variables
+      - constraints
+      example_refs:
+      - queue_optimization
+    algorithms:
+      implementation_name: algorithms
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases:
+      - heuristics
+      derived_from:
+      - dlo_creative_heuristics
+      - dlo_efficient_heuristics
+      - dlo_algorithms
+      purpose: Choose a repeatable procedure with an appropriate cost and guarantee.
+      use_when:
+      - design
+      - optimization
+      - quantitative
+      triggers:
+      - Repeated search or computation needs a tractable procedure.
+      avoid_when:
+      - A one-off judgment has no stable procedure to implement.
+      questions:
+      - Does this task require a guarantee, or is a bounded heuristic sufficient?
+      operation:
+      - Define inputs, outputs, correctness conditions, and resource limits.
+      - Compare exact algorithms and heuristics; state failure conditions and check results.
+      expected_output:
+      - A procedure with cost, guarantees, and validation criteria.
+      anti_patterns:
+      - Claiming a heuristic guarantees the optimum.
+      related_hcs:
+      - optimization
+      - constraints
+      example_refs: []
+    iterative_design:
+      implementation_name: iterative_design
+      official_name: '#designthinking'
+      type: habit
+      runtime_role: check
+      competency: thinking_creatively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 11
+      purpose: Refine an uncertain solution through bounded feedback.
+      use_when:
+      - design
+      - strategy
+      - communication
+      triggers:
+      - User needs or interactions require prototype evidence.
+      avoid_when:
+      - A known specification already has a direct verified implementation.
+      questions:
+      - What small prototype tests the most consequential design uncertainty?
+      operation:
+      - Build a minimal prototype against a success criterion.
+      - Gather relevant feedback, revise the affected design, and stop when the criterion
+        is met.
+      expected_output:
+      - A bounded prototype and revision plan.
+      anti_patterns:
+      - Iterating endlessly without a stopping criterion.
+      related_hcs:
+      - testability
+      - audience_design
+      example_refs: []
+  research_methods:
+    research_design:
+      implementation_name: research_design
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: thinking_creatively
+      aliases:
+      - sampling
+      - controls
+      - observational_vs_experimental_design
+      derived_from:
+      - dlo_methods
+      - dlo_discovery
+      - dlo_significance
+      purpose: Choose evidence collection that can answer the question.
+      use_when:
+      - research
+      - causal
+      - diagnostic
+      triggers:
+      - New evidence is needed to distinguish claims.
+      avoid_when:
+      - Adequate existing evidence already answers the question.
+      questions:
+      - Which method identifies the effect or experience of interest?
+      operation:
+      - Compare experiments, observations, surveys, interviews, and cases against the estimand or question.
+      - Specify sampling, controls, measurement, selection limits, replication, and a useful effect threshold.
+      expected_output:
+      - A study design with comparison, target population, and validity limits.
+      anti_patterns:
+      - Assuming a survey measures causal impact or a convenience sample generalizes.
+      related_hcs:
+      - testability
+      - variables
+      - statistics
+      example_refs:
+      - productivity_study
+      - revenue_cause
+  complex_systems:
+    system_boundaries:
+      implementation_name: system_boundaries
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases:
+      - system_decomposition
+      derived_from:
+      - dlo_systems
+      purpose: Identify what is inside the model and what crosses its boundary.
+      use_when:
+      - complex_system
+      - design
+      - strategy
+      - diagnostic
+      triggers:
+      - Local changes move costs, queues, incentives, or failures elsewhere.
+      avoid_when:
+      - A self-contained component has no material external interaction.
+      questions:
+      - Which external interactions could reverse the local conclusion?
+      operation:
+      - Specify boundary, components, external inputs, outputs, interfaces, and feedback.
+      - Track displaced effects and justify excluded processes or scales.
+      expected_output:
+      - A boundary and interaction map with exclusions.
+      anti_patterns:
+      - Optimizing one component while exporting harm outside the boundary.
+      related_hcs:
+      - levels_of_analysis
+      - decomposition
+      example_refs:
+      - software_parallel
+      - queue_optimization
+      derivation_note: Boundary, interface, and feedback artifacts are AI extensions of the decomposition
+        and interaction objectives; no official system-boundaries HC is asserted.
+    levels_of_analysis:
+      implementation_name: levels_of_analysis
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_levels
+      purpose: Explain links across individual, organizational, and system scales.
+      use_when:
+      - complex_system
+      - explanatory
+      - diagnostic
+      - strategy
+      triggers:
+      - A conclusion at one scale is applied to another.
+      avoid_when:
+      - Only one level matters to the stated inference.
+      questions:
+      - How does a mechanism at one level produce the outcome at another?
+      operation:
+      - Identify the levels needed for the question and their measurements.
+      - Trace cross-level mechanisms and check aggregation errors.
+      expected_output:
+      - An explanation linking relevant levels.
+      anti_patterns:
+      - Inferring individual behavior directly from aggregate averages.
+      related_hcs:
+      - emergence
+      - system_boundaries
+      example_refs: []
+    emergence:
+      implementation_name: emergence
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_emergence
+      purpose: Explain collective behavior through interactions.
+      use_when:
+      - complex_system
+      - explanatory
+      - prediction
+      triggers:
+      - Aggregate behavior cannot be predicted from isolated component properties.
+      avoid_when:
+      - The outcome is an additive total without meaningful interaction.
+      questions:
+      - Which interaction produces the collective pattern?
+      operation:
+      - Identify an aggregate pattern and candidate interaction mechanism.
+      - Compare the interacting system with an interaction-free counterfactual or model.
+      expected_output:
+      - An interaction-based explanation with a discriminating test.
+      anti_patterns:
+      - Calling every surprising outcome emergent.
+      related_hcs:
+      - network
+      - multiple_causes
+      example_refs:
+      - queue_optimization
+    multiple_causes:
+      implementation_name: multiple_causes
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_multiple_causes
+      purpose: Assess interacting contributors instead of one universal cause.
+      use_when:
+      - causal
+      - diagnostic
+      - complex_system
+      triggers:
+      - Several conditions jointly affect an outcome.
+      avoid_when:
+      - A single verified mechanism fully answers the narrow question.
+      questions:
+      - Which causes contribute, and which combinations are necessary or sufficient?
+      operation:
+      - Separate necessary, sufficient, and contributing conditions where evidence permits.
+      - Map interactions and seek observations that distinguish causal combinations.
+      expected_output:
+      - A qualified map of interacting causes.
+      anti_patterns:
+      - Declaring every plausible factor causal.
+      related_hcs:
+      - correlation_causation
+      - variables
+      example_refs: []
+    network:
+      implementation_name: network
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_network
+      purpose: Explain how relationships alter propagation or access.
+      use_when:
+      - complex_system
+      - strategy
+      - diagnostic
+      triggers:
+      - Connectivity affects bottlenecks, diffusion, influence, or resilience.
+      avoid_when:
+      - A node and edge model would obscure the mechanism.
+      questions:
+      - Which relationship and direction determine the outcome?
+      operation:
+      - Define nodes, edge meanings, directions, weights, and missing links.
+      - Analyze bottlenecks, hubs, alternate paths, and propagation against the question.
+      expected_output:
+      - A network mechanism and a relevant intervention.
+      anti_patterns:
+      - Drawing a network without using its structure.
+      related_hcs:
+      - emergence
+      - system_boundaries
+      example_refs: []
+    sensitivity_analysis:
+      implementation_name: sensitivity_analysis
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_system_sensitivity
+      - dlo_risk
+      - dlo_simulation
+      - dlo_optimization
+      purpose: Find the conditions under which the conclusion changes.
+      use_when:
+      - prediction
+      - decision
+      - quantitative
+      - optimization
+      - complex_system
+      triggers:
+      - A result depends on uncertain parameters or boundary choices.
+      avoid_when:
+      - The conclusion is robust and sensitivity adds no decision value.
+      questions:
+      - Which plausible parameter change reverses the recommendation?
+      operation:
+      - Vary the most consequential uncertain assumptions across supported ranges or scenarios.
+      - Report thresholds, interactions, and the next measurement that reduces decision uncertainty.
+      expected_output:
+      - A reversal threshold or a qualitative robustness statement.
+      anti_patterns:
+      - Using arbitrary ranges to manufacture confidence.
+      related_hcs:
+      - assumption_check
+      - risk_uncertainty
+      example_refs:
+      - hub_fidelity
+      derivation_note: A decision sensitivity sweep is an AI synthesis of risk, simulation, and optimization
+        objectives. Dynamical sensitivity in the systems objective is related, not an equivalent official
+        definition.
+  communication:
+    composition:
+      implementation_name: composition
+      official_name: '#composition'
+      type: habit
+      runtime_role: check
+      competency: communicating_effectively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 13
+      purpose: Express the answer clearly with only necessary detail.
+      use_when:
+      - communication
+      triggers:
+      - Ambiguous language prevents the audience from acting.
+      avoid_when:
+      - Routine answer wording needs no separate operator selection.
+      questions:
+      - What must the reader understand or do next?
+      operation:
+      - State the main result early using precise, audience-appropriate language.
+      - Remove redundant explanation and clarify terms that affect interpretation.
+      expected_output:
+      - A concise, actionable explanation.
+      anti_patterns:
+      - Making framework visibility a reason for verbosity.
+      related_hcs:
+      - audience_design
+      example_refs:
+      - public_explanation
+    multimodal_design:
+      implementation_name: multimodal_design
+      official_name: '#multimodaldesign'
+      type: habit
+      runtime_role: check
+      competency: communicating_effectively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 14
+      purpose: Make visual or multimedia structure support comprehension.
+      use_when:
+      - communication
+      - design
+      triggers:
+      - Perception or visual organization changes user understanding.
+      - Physical controls or product cues invite an incorrect action.
+      avoid_when:
+      - Plain prose conveys the result more effectively.
+      questions:
+      - Which perceptual cue helps the audience interpret the information correctly?
+      operation:
+      - Match physical cues, controls, or visual hierarchy to the required action and intended users.
+      - Check perception, accessibility, misleading scales or cues, and compatibility between modalities;
+        test actual user behavior.
+      expected_output:
+      - A product or communication design with clear action cues and an observable usability check.
+      anti_patterns:
+      - Adding decoration that obscures the decision.
+      related_hcs:
+      - audience_design
+      - statistics
+      example_refs:
+      - public_explanation
+      supporting_objectives:
+      - dlo_visualization
+    audience_design:
+      implementation_name: audience_design
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: communicating_effectively
+      aliases:
+      - argument_structure
+      - thesis
+      - organization
+      - professionalism
+      derived_from:
+      - dlo_language
+      - dlo_audience
+      - dlo_nonverbal
+      purpose: Match the argument and medium to the receiver's decision.
+      use_when:
+      - communication
+      - strategy
+      - negotiation
+      triggers:
+      - Different audiences need different evidence or framing.
+      avoid_when:
+      - The audience and presentation are already adequate.
+      questions:
+      - What does this audience know, value, and need to decide?
+      operation:
+      - Define audience, thesis, evidence structure, medium, and professional conventions.
+      - Check organization, connotation, tone, and supported interpretation; avoid inventing nonverbal
+        cues in text-only settings.
+      expected_output:
+      - An audience-specific argument and presentation plan.
+      anti_patterns:
+      - Tailoring language by suppressing contrary evidence.
+      related_hcs:
+      - composition
+      - multimodal_design
+      example_refs:
+      - public_explanation
+  interaction:
+    negotiation:
+      implementation_name: negotiation
+      official_name: '#negotiate'
+      type: habit
+      runtime_role: check
+      competency: interacting_effectively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 15
+      purpose: Structure a discussion around interests and feasible concessions.
+      use_when:
+      - negotiation
+      triggers:
+      - Stakeholders must reach agreement on conflicting terms.
+      avoid_when:
+      - No negotiation or delegated authority exists.
+      questions:
+      - What interests can be satisfied through different terms?
+      operation:
+      - Identify interests, authority, priorities, process, and common ground.
+      - Compare packages and conditional concessions against feasible outside options.
+      expected_output:
+      - A negotiation plan with interests and concession conditions.
+      anti_patterns:
+      - Mistaking a stated position for the only acceptable outcome.
+      related_hcs:
+      - batna
+      - cost_benefit
+      example_refs:
+      - supplier_agreement
+      supporting_objectives:
+      - dlo_negotiation
+    batna:
+      implementation_name: batna
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_batna
+      purpose: Compare an agreement with a feasible outside option.
+      use_when:
+      - negotiation
+      - decision
+      triggers:
+      - A party needs a walk-away criterion.
+      avoid_when:
+      - An outside option is being invented rather than verified.
+      questions:
+      - What can this party actually do if no agreement is reached?
+      operation:
+      - Identify feasible Best Alternatives to a Negotiated Agreement for each party.
+      - Compare dimensions, switching costs, and deadlines; set a reservation condition.
+      expected_output:
+      - A verified outside option and walk-away criterion.
+      anti_patterns:
+      - Aspirational alternatives treated as available leverage.
+      related_hcs:
+      - negotiation
+      - constraints
+      example_refs:
+      - supplier_agreement
+    differences:
+      implementation_name: differences
+      official_name: '#differences'
+      type: habit
+      runtime_role: check
+      competency: interacting_effectively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 16
+      purpose: Fit collaboration to evidenced differences between people.
+      use_when:
+      - strategy
+      - negotiation
+      triggers:
+      - Skills, motivations, or perspectives affect cooperation.
+      avoid_when:
+      - Differences are irrelevant or inferred from stereotypes.
+      questions:
+      - Which observed differences change roles or communication?
+      operation:
+      - Identify relevant skills, perspectives, and motivations from evidence.
+      - Match roles or communication to those differences while maintaining shared goals.
+      expected_output:
+      - A collaboration adjustment grounded in observed differences.
+      anti_patterns:
+      - Assigning traits from demographic stereotypes.
+      related_hcs:
+      - group_dynamics
+      - audience_design
+      example_refs: []
+    group_dynamics:
+      implementation_name: group_dynamics
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases:
+      - leadership
+      - power
+      - conformity
+      - self_awareness
+      - emotional_intelligence
+      - responsibility
+      derived_from:
+      - dlo_leadership
+      - dlo_groups
+      - dlo_self
+      purpose: Account for power, conformity, roles, and interpersonal behavior.
+      use_when:
+      - strategy
+      - negotiation
+      - complex_system
+      - ethical
+      triggers:
+      - Group incentives or authority distort individual contributions.
+      avoid_when:
+      - The task has no consequential group interaction.
+      questions:
+      - Who can act, dissent, influence, or be held responsible?
+      operation:
+      - Map authority, incentives, roles, skills, and organizational constraints.
+      - Seek independent dissent; account for emotional responses, self-awareness, and explicit commitments.
+      expected_output:
+      - A collaboration or leadership plan with responsibility and dissent channels.
+      anti_patterns:
+      - Explaining group outcomes solely through one person's traits.
+      related_hcs:
+      - differences
+      - levels_of_analysis
+      example_refs: []
+    persuasion:
+      implementation_name: persuasion
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases:
+      - choice_architecture
+      derived_from:
+      - dlo_persuasion
+      - dlo_fairness
+      purpose: Evaluate how communication, incentives, and defaults affect choices.
+      use_when:
+      - communication
+      - negotiation
+      - strategy
+      - ethical
+      triggers:
+      - Choice architecture or messaging affects another person's decision.
+      avoid_when:
+      - Only factual explanation is requested and influence adds no value.
+      questions:
+      - What mechanism changes the choice, and does it preserve informed agency?
+      operation:
+      - Identify evidence, emotional appeals, defaults, incentives, and their likely behavioral effects.
+      - Compare transparent approaches; check autonomy, fairness, and unintended consequences.
+      expected_output:
+      - A justified influence plan with ethical limits.
+      anti_patterns:
+      - Substituting manipulation or unsupported confidence for evidence.
+      related_hcs:
+      - audience_design
+      - ethical_framing
+      example_refs: []
+  ethics:
+    ethical_framing:
+      implementation_name: ethical_framing
+      official_name: '#ethicalframing'
+      type: concept
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      source:
+        document: intro2017
+        location: p. 17
+      purpose: Recognize ethical conflict and frame affected interests.
+      use_when:
+      - ethical
+      - decision
+      - strategy
+      triggers:
+      - An action distributes harm, opportunity, rights, or duties.
+      avoid_when:
+      - No material ethical conflict exists in the narrow task.
+      questions:
+      - Which ethical principles are in tension, and who bears the consequences?
+      operation:
+      - Identify affected parties, rights, duties, harms, and fairness concerns.
+      - Compare ethical frames before assessing which action is justified.
+      expected_output:
+      - An explicit ethical problem with alternative frames.
+      anti_patterns:
+      - Treating aggregate benefit as sufficient ethical justification.
+      related_hcs:
+      - ethical_conflicts
+      - cost_benefit
+      example_refs:
+      - allocation_ethics
+    ethical_conflicts:
+      implementation_name: ethical_conflicts
+      official_name: null
+      type: derived
+      runtime_role: tool
+      competency: interacting_effectively
+      aliases: []
+      derived_from:
+      - dlo_ethics
+      purpose: Resolve competing principles with explicit contextual reasons.
+      use_when:
+      - ethical
+      - decision
+      triggers:
+      - Valid ethical principles support conflicting actions.
+      avoid_when:
+      - There is no conflict between the relevant principles.
+      questions:
+      - What contextual reason justifies prioritizing one principle here?
+      operation:
+      - Compare feasible actions under the competing principles and affected stakeholders.
+      - State priority, justification, mitigation, and conditions that would change it.
+      expected_output:
+      - A justified choice with remaining ethical costs.
+      anti_patterns:
+      - Using a numerical score to hide a value judgment.
+      related_hcs:
+      - ethical_framing
+      - goals
+      example_refs:
+      - allocation_ethics

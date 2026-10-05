@@ -1,0 +1,192 @@
+{
+  "date": "2026-10-05",
+  "scope": "Targeted checks after the functional review fixes; not a full acceptance run.",
+  "model_version": "Not recorded; fresh agents inherited the active model.",
+  "causal_prompt": "Revenue rose 20% after our feature launch. Marketing spend and prices also rose that month, and it was our usual busy season. Can we attribute the increase to the feature? What evidence is most useful next?",
+  "causal_answer": {
+    "answer": "No—the 20% increase is consistent with a feature effect, but it does not identify one. Higher prices, marketing, and seasonal demand could explain some or all of it. You need a comparison estimating what revenue would have been without the feature under the same conditions.\n\nThe most useful next evidence is a concurrent randomized holdout: assign eligible customers to feature access or no access, with equivalent pricing and marketing exposure. Measure revenue per assigned customer over a predefined window, including non-users, and report the incremental effect with an uncertainty interval against a minimum commercially meaningful lift. This estimates the feature’s effect under those conditions; it does not automatically attribute the historical 20% to it.\n\nIf an experiment is impractical, use an unaffected, comparable customer group or market and compare its before/after change with the exposed group’s. Check similar pre-launch trends, equivalent price and marketing changes, and absence of spillovers or other different shocks; the causal conclusion depends on these assumptions.\n\nCollect launch/exposure dates, customer-level revenue, prices, purchases, conversion, and marketing exposure for both groups, plus enough pre-launch history to assess seasonality. Separate price increases from changes in purchasing volume. A before/after total or a survey of feature users alone cannot establish attribution.",
+    "selected_operators": [
+      "correlation_causation",
+      "variables",
+      "research_design"
+    ],
+    "operator_contributions": {
+      "correlation_causation": "Bounded the claim by identifying price, marketing, and seasonality as competing explanations and requiring a credible no-feature counterfactual.",
+      "variables": "Specified feature assignment as the intervention, revenue per assigned customer over a defined window as the outcome, and pricing, marketing, purchase volume, and timing as required measurements or controls.",
+      "research_design": "Prioritized a concurrent randomized holdout and supplied an observational fallback with explicit comparison assumptions and a commercially meaningful effect threshold."
+    },
+    "paths_read": [
+      "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/causal-check/prompt.txt",
+      "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/causal-check/skill/SKILL.md",
+      "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/causal-check/skill/scripts/hc.py",
+      "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/causal-check/skill/hc_registry.yaml"
+    ]
+  },
+  "activation_metadata": {
+    "name": "hc-problem-solving",
+    "description": "Frame and solve complex or ambiguous problems with a small, source-traceable set of Minerva cognitive tools. Use for consequential decisions, competing explanations, research design, optimization, or interacting systems; skip routine factual answers and straightforward execution."
+  },
+  "activation_prompts": [
+    {
+      "id": "arithmetic",
+      "prompt": "What is 2 + 2?"
+    },
+    {
+      "id": "translation",
+      "prompt": "Translate bonjour into English."
+    },
+    {
+      "id": "rename",
+      "prompt": "Rename variable x to count in this supplied function: def twice(x): return 2*x"
+    },
+    {
+      "id": "triage",
+      "prompt": "Should we automate support triage when accuracy, cost, and escalation conflict?"
+    },
+    {
+      "id": "causal",
+      "prompt": "Did a product launch cause growth when marketing and prices also changed?"
+    }
+  ],
+  "activation_decisions": [
+    {
+      "id": "arithmetic",
+      "select": false,
+      "reason": "Routine arithmetic falls under straightforward factual answers."
+    },
+    {
+      "id": "translation",
+      "select": false,
+      "reason": "A single-word translation is a routine factual answer."
+    },
+    {
+      "id": "rename",
+      "select": false,
+      "reason": "The supplied variable rename is straightforward execution."
+    },
+    {
+      "id": "triage",
+      "select": true,
+      "reason": "The automation decision involves conflicting accuracy, cost, and escalation objectives."
+    },
+    {
+      "id": "causal",
+      "select": true,
+      "reason": "The causal question involves competing explanations from simultaneous changes."
+    }
+  ],
+  "independent_grading": {
+    "evaluation": "Fresh independent behavior grading against frozen original causal_revenue criteria and predeclared activation expectations",
+    "grading_scope": "The ordinary answer text was graded for analytical content. Selected operator names and author-supplied contribution descriptions were not used as evidence.",
+    "score_scale": {
+      "0": "missing or wrong",
+      "1": "partial",
+      "2": "explicit"
+    },
+    "causal_revenue": {
+      "criteria": [
+        {
+          "criterion": "Do not infer causation from temporal association.",
+          "score": 2,
+          "evidence": [
+            "the 20% increase is consistent with a feature effect, but it does not identify one",
+            "it does not automatically attribute the historical 20% to it"
+          ],
+          "assessment": "Explicitly distinguishes an observed increase from identified causation and limits retrospective attribution."
+        },
+        {
+          "criterion": "Identify marketing, prices, and seasonality as alternative causes or confounders.",
+          "score": 2,
+          "evidence": [
+            "Higher prices, marketing, and seasonal demand could explain some or all of it."
+          ],
+          "assessment": "Names all three required competing explanations without claiming their actual contributions are known."
+        },
+        {
+          "criterion": "Propose a credible comparison design and its assumptions, preferably randomization when feasible or a suitable comparison group and pre-trends.",
+          "score": 2,
+          "evidence": [
+            "a concurrent randomized holdout",
+            "with equivalent pricing and marketing exposure",
+            "Check similar pre-launch trends, equivalent price and marketing changes, and absence of spillovers or other different shocks"
+          ],
+          "assessment": "Prioritizes randomized assignment and provides a comparison-group before/after fallback with explicit identifying assumptions."
+        },
+        {
+          "criterion": "Prioritize discriminating evidence and practical effect size; do not invent the feature effect.",
+          "score": 2,
+          "evidence": [
+            "The most useful next evidence is a concurrent randomized holdout",
+            "report the incremental effect with an uncertainty interval against a minimum commercially meaningful lift",
+            "Separate price increases from changes in purchasing volume."
+          ],
+          "assessment": "Ranks useful evidence, specifies a per-assigned-customer outcome and uncertainty, and invokes commercial significance without inventing an effect estimate."
+        }
+      ],
+      "total_score": 8,
+      "maximum_score": 8,
+      "unsupported_claims": [],
+      "unsupported_claims_assessment": "No material unsupported factual or numerical claim about the feature effect was found. Proposed designs are conditional recommendations, and their historical attribution limits and observational assumptions are stated.",
+      "confidence": "high for rubric scoring of this answer"
+    },
+    "activation": {
+      "expectation_source": "Parent-provided pre-generation repository evaluation-plan expectation: skip arithmetic, translation, rename; use triage, causal.",
+      "matches": [
+        {
+          "id": "arithmetic",
+          "expected_select": false,
+          "actual_select": false,
+          "match": true,
+          "evidence": "Routine arithmetic falls under straightforward factual answers."
+        },
+        {
+          "id": "translation",
+          "expected_select": false,
+          "actual_select": false,
+          "match": true,
+          "evidence": "A single-word translation is a routine factual answer."
+        },
+        {
+          "id": "rename",
+          "expected_select": false,
+          "actual_select": false,
+          "match": true,
+          "evidence": "The supplied variable rename is straightforward execution."
+        },
+        {
+          "id": "triage",
+          "expected_select": true,
+          "actual_select": true,
+          "match": true,
+          "evidence": "conflicting accuracy, cost, and escalation objectives"
+        },
+        {
+          "id": "causal",
+          "expected_select": true,
+          "actual_select": true,
+          "match": true,
+          "evidence": "competing explanations from simultaneous changes"
+        }
+      ],
+      "matched_count": 5,
+      "total_count": 5,
+      "metadata_consistency": "Observed decisions also align with the supplied metadata: consequential decisions and competing explanations activate the skill; routine factual answers and straightforward execution do not.",
+      "confidence": "high for comparison of these recorded choices to the stated expectations"
+    },
+    "methodological_limits": [
+      "Only one causal answer was graded; this does not establish repeatability or performance across other cases.",
+      "Activation was observed in one selector context containing these five prompts; it does not establish general activation precision or recall.",
+      "Isolation was instruction-level; this grading does not verify a stronger technical isolation boundary.",
+      "Exact generation and selector model IDs were unrecorded in the supplied evaluation material.",
+      "There was no untreated baseline, so these observations cannot establish that the skill caused an improvement.",
+      "The expected activation selection was supplied as having been set before generation; the repository evaluation plan itself was not inspected.",
+      "The grader did not inspect earlier answers, the skill repository, other private cases, source answers, or skill-author judgments."
+    ]
+  },
+  "copied_runtime_sha256": {
+    "SKILL.md": "1bb778f5d1ba9360ec9fd2769eb06d39d8a3a74d7e74c5739fd730f542067542",
+    "hc_registry.yaml": "8b5765b81beefd1c9fda21ae7eb4946332b83f74c8b5728a8c19689a890aa712",
+    "scripts/hc.py": "49456727d969b963691da5c69d0eac85fb3feef8a5ad385a7bab3a5243aba549"
+  },
+  "record_interpretation": "Grades apply only to the recorded runtime file digests, not to later revisions. Later instruction wording and relative-root fixes received static tests and review only; no recorded behavioral run used the final entrypoint wording."
+}

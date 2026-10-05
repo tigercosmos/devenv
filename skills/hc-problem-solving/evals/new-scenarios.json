@@ -1,0 +1,489 @@
+{
+  "date": "2026-10-05",
+  "scope": "Three hypothetical scenarios with full runtime resources available, but optional examples and references not read. Separate fresh context per case and fresh independent grader. Structurally related to prior cases; not held-out transfer tests or the complete acceptance suite.",
+  "model_version": "Not recorded; fresh agents inherited the active model.",
+  "setup": {
+    "rubric_saved_before_solver_delegation": true,
+    "rubric_sha256": "31f7ad244120595be5a7acc397fe736d127a26cce435a707349269ff8452d04a",
+    "scoring": "0 absent/wrong; 1 partial; 2 all material elements explicit. Require 2 on every criterion, no material unsupported conclusions. Operator names and exact wording not required.",
+    "solver_access": "Prompt and copied runtime including authored examples and references; evaluation files and frozen rubric withheld; no online retrieval.",
+    "grader_access": "Frozen rubric, ordinary answers with separate audit fields, and runtime manifests; no repository, previous evaluations, source URLs, or author judgments.",
+    "isolation": "Instruction-based boundaries on a shared filesystem; access summaries are solver-authored, not independently enforced traces.",
+    "author_checks": "Rehashed all copied runtime files, confirmed examples and references are present and evals absent. Grader did not perform those checks."
+  },
+  "cases": [
+    {
+      "id": "rental_kiosk",
+      "prompt": "An audio-guide rental kiosk has two identical physical buttons: one confirms the rental, the other clears the entire form. Visitors wearing winter gloves often hit the wrong button. Larger printed labels did not solve it. We cannot replace the whole kiosk, and have $600 for changes. What should we prototype and check before rollout?",
+      "criteria": [
+        "Identify the physical cue or control-selection problem rather than only adding more text.",
+        "Propose a concrete feasible physical or multimodal change and consider an alternative within the stated budget and replacement constraint.",
+        "Account for actual users and accessibility; define an observable trial outcome and iterate without inventing a success rate."
+      ],
+      "solver_output": {
+        "answer": "Prototype physical differentiation and protection against accidental clearing. Larger labels failing suggests the problem may involve targeting or distinguishing the controls; observe a few gloved attempts before choosing the final geometry.\n\nCompare the current kiosk with two removable mockups:\n- Give Confirm a broad, raised, easy-to-press surface; give Clear a distinctly shaped, recessed or guarded surface. Keep short labels and icons; color can supplement these cues. Test whether gloves can actually feel the difference.\n- Add greater separation if the panel permits, or a divider/guard around Clear. If software changes are available cheaply, also test a reversible clear with Undo or an explicit clear-confirmation step.\n\nBefore rollout, use a sandbox rental with realistic filled forms. Include first-time visitors wearing different winter gloves, plus bare-handed users and people with limited dexterity or vision. Compare designs under the kiosk’s actual lighting and posture; counterbalance test order and avoid coaching. Include both completing a rental and deliberately clearing a form. Record wrong-button presses, actual unwanted clears or confirmations, completion time, retries, and successful intentional resets. Ask what each control appears to do before explaining it.\n\nRevise the best mockup, then run a small supervised pilot. Set acceptable error and task-time limits before testing; require fewer errors than the current design without making intentional reset or accessibility worse. A few error-free trials are not proof of reliability.\n\nKeep prototype spending small and get an all-in quote covering parts, fitting, testing, and contingency within $600. Check secure attachment, cleaning, wear, glove clearance, and reliable button travel before installing durable parts.",
+        "selected_operators": [
+          "right_problem",
+          "constraints",
+          "iterative_design",
+          "multimodal_design",
+          "research_design"
+        ],
+        "operator_contributions": {
+          "right_problem": "Reframed the task as reducing wrong actions and lost form data, with error and task-time measures instead of label readability alone.",
+          "constraints": "Limited the options to kiosk retrofits within an all-in $600 budget and made software changes conditional on affordable access.",
+          "iterative_design": "Specified removable mockups, a revision step, and a supervised pilot with acceptance limits before durable installation.",
+          "multimodal_design": "Matched raised, recessed, shaped, and separated controls to gloved operation and required accessibility and actual-behavior checks.",
+          "research_design": "Added a baseline comparison, counterbalanced order, realistic tasks, relevant user sampling, and observable error and timing measures."
+        },
+        "reads": [
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/rental_kiosk/prompt.txt",
+            "purpose": "Read the kiosk problem, failed intervention, replacement restriction, and budget."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/rental_kiosk/hc-problem-solving/SKILL.md",
+            "purpose": "Read the required operator-selection and application workflow."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/rental_kiosk/hc-problem-solving/scripts/hc.py",
+            "purpose": "Executed the provided retrieval script to show the five selected operator records; runtime dependency loading only."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/rental_kiosk/hc-problem-solving/hc_registry.yaml",
+            "purpose": "Retrieved only right_problem, constraints, iterative_design, multimodal_design, and research_design records through hc.py."
+          }
+        ]
+      },
+      "runtime_sha256": {
+        "references.md": "d43c8c8fff28b8fcc51dc532e795e648bbdd790911011b07a51f4bf8d6b863be",
+        "SKILL.md": "3700f29d349ea38c3e048d47fe6bfe026d43fd79aa802274bb854b7e68a88a6a",
+        "hc_registry.yaml": "cca1bc460b37d81cdd7d7422a0d49ea991b25083f5fd0157b92139c2b1646dcd",
+        "hc_examples.yaml": "32f70c05ef78ecc151a53ea99e0bf7841d208eb60d66099534f661ece39aed91",
+        "scripts/hc.py": "2b7028dc83d0c997fc8d6cd3c70544996231e05cce1c74025edad759e96adf64"
+      }
+    },
+    {
+      "id": "observatory",
+      "prompt": "Our volunteer observatory has one blurred photo that appears to show an asteroid position shift. We also changed tracking software and noticed temperature drift in the instrument. There is no calibrated uncertainty estimate. A donor wants the announcement headline to say we proved the asteroid was deflected. What can we responsibly announce, and what evidence should we obtain next?",
+      "criteria": [
+        "Distinguish the observed apparent shift from an established real shift or deflection; do not present uncertainty as proof that nothing happened.",
+        "Consider both a real signal and measurement or tracking explanations, with discriminating calibrated repeat or independent observations.",
+        "Give clear public wording with the limits, and state what evidence would justify a stronger conclusion; preserve truth despite donor pressure."
+      ],
+      "solver_output": {
+        "answer": "Announce an unresolved observation, not a proven deflection. A suitable headline is: “Observatory investigates possible asteroid position discrepancy.”\n\nSuggested wording: “One blurred image appears to show a position discrepancy. We also changed tracking software and observed instrument temperature drift. Without calibrated measurement uncertainty, we cannot establish whether the discrepancy is real or an imaging or processing artifact. Follow-up observations and calibration are needed.” This neither proves nor rules out deflection, and supports no numerical confidence claim.\n\nObtain the following evidence next:\n\n1. Preserve the raw image and logs. Verify the asteroid identification, exposure time and clock accuracy, reference-star positions, and expected position from an orbital prediction with its uncertainty. Define the outcome as the measured angular position minus the predicted position at that time, rather than a visual displacement between photos.\n2. Calibrate positional uncertainty, including blur, centroid fitting, reference-star registration, timing, and instrument drift. Record temperature and software version with each exposure; check whether reference stars show similar apparent shifts.\n3. Process the same raw images with both software versions, holding other settings fixed. Observe stable reference fields across measured temperatures to distinguish software effects from temperature-dependent instrument effects. These checks diagnose measurement artifacts; they do not themselves establish asteroid deflection.\n4. Obtain repeated, sharper observations over multiple nights and independent observations from another instrument or observatory. Compare the resulting trajectory with the predicted orbit, accounting for both measurement and prediction uncertainty. Recover earlier observations if available to constrain the prior trajectory.\n\nBefore reviewing the new results, specify a detection criterion: a persistent discrepancy that exceeds the calibrated combined uncertainty, survives artifact checks, and is independently reproduced. A defensible orbit-change claim needs trajectory evidence; attributing that change to a particular deflection event requires additional causal evidence.\n\nAccuracy takes priority over the donor’s preferred headline because volunteers, donors, and the public depend on a trustworthy announcement. Offer the donor credit for supporting verification, while acknowledging that this more cautious wording may disappoint them. Strengthen the claim only when the evidence supports it.",
+        "selected_operators": [
+          "evidence_vs_inference",
+          "correlation_causation",
+          "variables",
+          "research_design",
+          "ethical_conflicts"
+        ],
+        "operator_contributions": {
+          "evidence_vs_inference": "Separated the apparent discrepancy in one blurred image from a verified position shift or deflection and supplied announcement wording that preserves those limits.",
+          "correlation_causation": "Identified concurrent software and temperature changes as competing explanations and separated orbit-change detection from attribution to a deflection event.",
+          "variables": "Defined the measured outcome as a time-specific angular residual and identified temperature, software version, timing, reference stars, and prediction uncertainty as quantities to record or control.",
+          "research_design": "Specified paired software processing, temperature calibration, repeated observations, independent replication, and an uncertainty-based detection criterion.",
+          "ethical_conflicts": "Prioritized accurate public reporting over the donor’s preferred headline, acknowledged the possible donor disappointment, and offered verification-support credit as mitigation."
+        },
+        "reads": [
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/observatory/prompt.txt",
+            "access_purpose": "Read the case facts and requested announcement and evidence advice."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/observatory/hc-problem-solving",
+            "access_purpose": "Listed runtime filenames to locate its skill and retrieval script."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/observatory/hc-problem-solving/SKILL.md",
+            "access_purpose": "Read and applied the routing, retrieval, concrete-operator, synthesis, and final-audit instructions."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/observatory/hc-problem-solving/scripts/hc.py",
+            "access_purpose": "Executed the provided retrieval utility for the five selected operators."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/observatory/hc-problem-solving/hc_registry.yaml",
+            "access_purpose": "Retrieved the five selected operator records and their associated source metadata through scripts/hc.py show."
+          }
+        ]
+      },
+      "runtime_sha256": {
+        "references.md": "d43c8c8fff28b8fcc51dc532e795e648bbdd790911011b07a51f4bf8d6b863be",
+        "SKILL.md": "3700f29d349ea38c3e048d47fe6bfe026d43fd79aa802274bb854b7e68a88a6a",
+        "hc_registry.yaml": "cca1bc460b37d81cdd7d7422a0d49ea991b25083f5fd0157b92139c2b1646dcd",
+        "hc_examples.yaml": "32f70c05ef78ecc151a53ea99e0bf7841d208eb60d66099534f661ece39aed91",
+        "scripts/hc.py": "2b7028dc83d0c997fc8d6cd3c70544996231e05cce1c74025edad759e96adf64"
+      }
+    },
+    {
+      "id": "community_room",
+      "prompt": "Our community center wants to maximize booked room-hours, but its stated mission is broad, reliable participation. It has 12 volunteer staff-hours weekly; only one room is accessible without stairs, and activities must end by 9 pm. A sponsor offers maintenance funding in exchange for every weekday evening slot for a year. Small local groups need those evenings. A library across the street offers us rooms only on weekends. How should we decide?",
+      "criteria": [
+        "Check utilization against mission outcomes, identify affected groups and accessibility, and preserve volunteer/time constraints.",
+        "Compare sponsorship with at least two credible arrangements and distinguish the weekend alternative from a like-for-like weekday replacement.",
+        "Make benefits, opportunity costs, fairness tensions, authority or agreement conditions, uncertainty and next evidence concrete; do not invent weights or promise a unique optimum."
+      ],
+      "solver_output": {
+        "answer": "Do not accept the offer as written. First seek terms that preserve community evening access; a full year of exclusive evenings could improve bookings while undermining your mission. If maintenance funding is essential to keeping the center safely open, compare the actual closure risk before rejecting the funding outright.\n\nDecide in this order:\n\n1. Define success as broad, reliable participation: who can attend, which groups get dependable recurring slots, and whether people needing step-free access can participate. Track booked room-hours as a secondary measure. Agree on a minimum level of local evening access with affected groups before negotiating.\n2. Establish feasibility. Your current staffing ceiling is 12 volunteer staff-hours per week, including preparation, supervision, cleanup, and administration; simultaneous rooms may require additional volunteers. Activities must end by 9 pm. Schedule groups needing step-free access in the one accessible room without conflicts. Sponsor exclusivity and contract duration are negotiable terms, not fixed operating constraints. The library's weekend-only availability is a fixed limit of its current offer; verify its accessibility and staffing requirements.\n3. Compare three packages using the same criteria:\n\n| Package | Main benefit | Main cost or condition |\n|---|---|---|\n| Keep community evenings; seek other maintenance funding | Preserves local access and scheduling flexibility | Viable only if maintenance can be funded and safe operation sustained |\n| Limited sponsor evenings, protected community slots, short trial | Combines funding with dependable local access | Requires sponsor agreement and a timetable within the staffing limit |\n| Sponsor gets all weekday evenings for a year | Secures the offered maintenance funding | Displaces local groups from the times they need and locks in that loss for a year |\n\nUse library weekends for activities whose participants can actually attend then. They add capacity but do not replace needed weekday evenings. Compare consequences separately for local groups, people needing accessible space, volunteers, the sponsor, and the center's long-term upkeep; do not let total hours conceal exclusion.\n\nHave the authorized decision-makers negotiate a package around the sponsor's underlying needs—such as dependable space or visibility—with protected recurring local slots, limited exclusivity, and a review or exit clause. Make concessions conditional on adequate funding and preserved access.\n\nBefore signing, obtain local evening demand, the maintenance funding gap and urgency, staffing needs, and the sponsor's flexibility. Choose the feasible package that sustains reliable participation. Accept full exclusivity only if credible evidence shows it is necessary to sustain the service and a workable arrangement still meets the agreed access minimum; the weekend library offer alone does not establish that.",
+        "selected_operators": [
+          "goals",
+          "constraints",
+          "cost_benefit",
+          "alternative_generation",
+          "negotiation"
+        ],
+        "operator_contributions": {
+          "goals": "Made broad, reliable and accessible participation the decision criterion, with booked room-hours treated as a secondary proxy and protected local evening access made explicit.",
+          "constraints": "Separated current staffing, access, closing-time and library availability limits from negotiable sponsor terms and required each timetable to satisfy the operating limits.",
+          "cost_benefit": "Compared funding and safe operation against displaced evening access, volunteer workload and a year of lost flexibility for the affected stakeholders.",
+          "alternative_generation": "Compared a conditional community-access baseline, a limited sponsorship trial and the full exclusive offer, while treating weekend library use as complementary capacity.",
+          "negotiation": "Proposed an authorized negotiation over sponsor interests, protected slots and conditional concessions, with a review or exit clause and a viable funding alternative as the comparison."
+        },
+        "reads": [
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/community_room/prompt.txt",
+            "purpose": "Read the user case, mission, resource limits and proposed sponsorship terms."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/community_room/hc-problem-solving",
+            "purpose": "Listed the permitted runtime files to locate SKILL.md and the retrieval script."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/community_room/hc-problem-solving/SKILL.md",
+            "purpose": "Read the operator selection, retrieval, application and answer synthesis instructions."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/community_room/hc-problem-solving/scripts/hc.py",
+            "purpose": "Executed the prescribed show command to retrieve only the five selected operator records."
+          },
+          {
+            "path": "/Users/tigercosmos/.codex/tmp/hc-fixes-20261005/new-cases/community_room/hc-problem-solving/hc_registry.yaml",
+            "purpose": "Retrieved goals, constraints, cost_benefit, alternative_generation and negotiation records through scripts/hc.py."
+          }
+        ]
+      },
+      "runtime_sha256": {
+        "references.md": "d43c8c8fff28b8fcc51dc532e795e648bbdd790911011b07a51f4bf8d6b863be",
+        "SKILL.md": "3700f29d349ea38c3e048d47fe6bfe026d43fd79aa802274bb854b7e68a88a6a",
+        "hc_registry.yaml": "cca1bc460b37d81cdd7d7422a0d49ea991b25083f5fd0157b92139c2b1646dcd",
+        "hc_examples.yaml": "32f70c05ef78ecc151a53ea99e0bf7841d208eb60d66099534f661ece39aed91",
+        "scripts/hc.py": "2b7028dc83d0c997fc8d6cd3c70544996231e05cce1c74025edad759e96adf64"
+      }
+    }
+  ],
+  "independent_grading": {
+    "grader_role": "Fresh independent answer-text grader",
+    "scope": {
+      "read_inputs": [
+        "private_rubric.json",
+        "rental_kiosk/answer.json",
+        "rental_kiosk/runtime_sha256.json",
+        "observatory/answer.json",
+        "observatory/runtime_sha256.json",
+        "community_room/answer.json",
+        "community_room/runtime_sha256.json"
+      ],
+      "grading_basis": "Only answer.json answer fields were scored against the frozen criteria. Selected operators and contribution/access audit fields were checked separately and did not rescue missing answer requirements.",
+      "not_read": [
+        "author judgments",
+        "previous evaluations",
+        "skill repository/runtime source contents",
+        "source URLs",
+        "private reasoning traces"
+      ],
+      "solver_results_edited": false
+    },
+    "scoring": {
+      "scale": {
+        "0": "absent or wrong",
+        "1": "partial",
+        "2": "all material elements explicit"
+      },
+      "pass_rule": "Every criterion must score 2 and there must be no material unsupported conclusion. Exact operator IDs and exact wording are not required."
+    },
+    "cases": [
+      {
+        "id": "rental_kiosk",
+        "pass": true,
+        "score": 6,
+        "maximum_score": 6,
+        "criteria": [
+          {
+            "criterion_number": 1,
+            "criterion": "Identify the physical cue or control-selection problem rather than only adding more text.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Prototype physical differentiation and protection against accidental clearing.",
+              "observe a few gloved attempts before choosing the final geometry"
+            ],
+            "rationale": "Identifies control targeting and differentiation as the problem; does not repeat the failed larger-label intervention."
+          },
+          {
+            "criterion_number": 2,
+            "criterion": "Propose a concrete feasible physical or multimodal change and consider an alternative within the stated budget and replacement constraint.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Give Confirm a broad, raised, easy-to-press surface; give Clear a distinctly shaped, recessed or guarded surface.",
+              "Add greater separation if the panel permits, or a divider/guard around Clear.",
+              "get an all-in quote covering parts, fitting, testing, and contingency within $600"
+            ],
+            "rationale": "Compares removable physical retrofits, conditionally adds affordable software protection, and explicitly checks the complete cost before installation. No whole-kiosk replacement is proposed."
+          },
+          {
+            "criterion_number": 3,
+            "criterion": "Account for actual users and accessibility; define an observable trial outcome and iterate without inventing a success rate.",
+            "score": 2,
+            "supporting_excerpts": [
+              "first-time visitors wearing different winter gloves, plus bare-handed users and people with limited dexterity or vision",
+              "Record wrong-button presses, actual unwanted clears or confirmations, completion time, retries, and successful intentional resets.",
+              "Revise the best mockup, then run a small supervised pilot.",
+              "A few error-free trials are not proof of reliability."
+            ],
+            "rationale": "Names actual users and accessibility needs, observable behavioral outcomes, baseline comparison and iteration. Acceptance limits are to be chosen before testing; no success rate is invented."
+          }
+        ],
+        "material_unsupported_claims": [],
+        "unsupported_claim_assessment": "Proposals and unknowns are framed as checks, conditions or evidence to obtain; no material factual outcome or guaranteed feasibility is invented.",
+        "operator_audit": {
+          "selected_operators": [
+            "right_problem",
+            "constraints",
+            "iterative_design",
+            "multimodal_design",
+            "research_design"
+          ],
+          "visible_answer_contributions": {
+            "right_problem": "physical differentiation and protection against accidental clearing",
+            "constraints": "an all-in quote covering parts, fitting, testing, and contingency within $600",
+            "iterative_design": "Revise the best mockup, then run a small supervised pilot.",
+            "multimodal_design": "raised, easy-to-press surface; give Clear a distinctly shaped, recessed or guarded surface",
+            "research_design": "counterbalance test order and avoid coaching"
+          },
+          "noncontributing_operators": [],
+          "exact_operator_id_occurrences_in_answer": {
+            "right_problem": 0,
+            "constraints": 0,
+            "iterative_design": 0,
+            "multimodal_design": 0,
+            "research_design": 0
+          },
+          "hc_names_used_as_labels_in_answer": false,
+          "operator_labeling_confined_to_separate_audit": true,
+          "all_exact_ids_absent_from_answer": true,
+          "note": "All selected operator IDs are absent from the answer body; names and claimed contributions are confined to separate audit fields.",
+          "physical_product_scope_of_multimodal_design": {
+            "satisfied": true,
+            "evidence": [
+              "broad, raised, easy-to-press surface",
+              "distinctly shaped, recessed or guarded surface",
+              "greater separation",
+              "Test whether gloves can actually feel the difference."
+            ],
+            "rationale": "Applies physical shape, tactile distinction and control layout to a product used with gloves, supplemented by labels/icons/color and behavior/accessibility trials."
+          }
+        },
+        "verbosity": {
+          "whitespace_word_count": 255,
+          "assessment": "Proportionate to a prototype-and-trial request. The attachment, cleaning and wear checks contribute to rollout feasibility; no material padding identified."
+        },
+        "confidence": "High for frozen-rubric textual coverage."
+      },
+      {
+        "id": "observatory",
+        "pass": true,
+        "score": 6,
+        "maximum_score": 6,
+        "criteria": [
+          {
+            "criterion_number": 1,
+            "criterion": "Distinguish the observed apparent shift from an established real shift or deflection; do not present uncertainty as proof that nothing happened.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Announce an unresolved observation, not a proven deflection.",
+              "This neither proves nor rules out deflection, and supports no numerical confidence claim."
+            ],
+            "rationale": "Keeps the apparent shift distinct from a real shift and deflection. Does not turn missing uncertainty into evidence that nothing occurred."
+          },
+          {
+            "criterion_number": 2,
+            "criterion": "Consider both a real signal and measurement or tracking explanations, with discriminating calibrated repeat or independent observations.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Calibrate positional uncertainty, including blur, centroid fitting, reference-star registration, timing, and instrument drift.",
+              "Process the same raw images with both software versions, holding other settings fixed.",
+              "Obtain repeated, sharper observations over multiple nights and independent observations from another instrument or observatory."
+            ],
+            "rationale": "Treats a real trajectory discrepancy and tracking/instrument artifacts as competing possibilities. Gives calibrated, repeated and independent observations plus discriminating software and temperature checks."
+          },
+          {
+            "criterion_number": 3,
+            "criterion": "Give clear public wording with the limits, and state what evidence would justify a stronger conclusion; preserve truth despite donor pressure.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Observatory investigates possible asteroid position discrepancy.",
+              "Without calibrated measurement uncertainty, we cannot establish whether the discrepancy is real or an imaging or processing artifact.",
+              "a persistent discrepancy that exceeds the calibrated combined uncertainty, survives artifact checks, and is independently reproduced",
+              "attributing that change to a particular deflection event requires additional causal evidence",
+              "Accuracy takes priority over the donor’s preferred headline"
+            ],
+            "rationale": "Provides usable headline and public wording, limits the claim, states stronger-evidence conditions and explicitly prioritizes truth over donor pressure."
+          }
+        ],
+        "material_unsupported_claims": [],
+        "unsupported_claim_assessment": "Proposals and unknowns are framed as checks, conditions or evidence to obtain; no material factual outcome or guaranteed feasibility is invented.",
+        "operator_audit": {
+          "selected_operators": [
+            "evidence_vs_inference",
+            "correlation_causation",
+            "variables",
+            "research_design",
+            "ethical_conflicts"
+          ],
+          "visible_answer_contributions": {
+            "evidence_vs_inference": "This neither proves nor rules out deflection",
+            "correlation_causation": "attributing that change to a particular deflection event requires additional causal evidence",
+            "variables": "Record temperature and software version with each exposure",
+            "research_design": "Process the same raw images with both software versions, holding other settings fixed.",
+            "ethical_conflicts": "Accuracy takes priority over the donor’s preferred headline"
+          },
+          "noncontributing_operators": [],
+          "exact_operator_id_occurrences_in_answer": {
+            "evidence_vs_inference": 0,
+            "correlation_causation": 0,
+            "variables": 0,
+            "research_design": 0,
+            "ethical_conflicts": 0
+          },
+          "hc_names_used_as_labels_in_answer": false,
+          "operator_labeling_confined_to_separate_audit": true,
+          "all_exact_ids_absent_from_answer": true,
+          "note": "All selected operator IDs are absent from the answer body; names and claimed contributions are confined to separate audit fields."
+        },
+        "verbosity": {
+          "whitespace_word_count": 332,
+          "assessment": "Detailed but focused. The calibration checklist and distinction between orbit change and causal attribution contribute to the requested evidence plan; no material padding identified."
+        },
+        "confidence": "High for frozen-rubric textual coverage."
+      },
+      {
+        "id": "community_room",
+        "pass": true,
+        "score": 6,
+        "maximum_score": 6,
+        "criteria": [
+          {
+            "criterion_number": 1,
+            "criterion": "Check utilization against mission outcomes, identify affected groups and accessibility, and preserve volunteer/time constraints.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Define success as broad, reliable participation",
+              "Track booked room-hours as a secondary measure.",
+              "12 volunteer staff-hours per week, including preparation, supervision, cleanup, and administration",
+              "Activities must end by 9 pm.",
+              "Schedule groups needing step-free access in the one accessible room without conflicts."
+            ],
+            "rationale": "Checks utilization against mission outcomes and preserves staffing, closing time and accessibility limits. Separately considers local groups, accessible-space users, volunteers, sponsor and upkeep."
+          },
+          {
+            "criterion_number": 2,
+            "criterion": "Compare sponsorship with at least two credible arrangements and distinguish the weekend alternative from a like-for-like weekday replacement.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Keep community evenings; seek other maintenance funding",
+              "Limited sponsor evenings, protected community slots, short trial",
+              "Sponsor gets all weekday evenings for a year",
+              "They add capacity but do not replace needed weekday evenings."
+            ],
+            "rationale": "Compares the offered sponsorship with two credible conditional alternatives: other funding while preserving evenings, and limited sponsorship with protected slots. Makes the weekend library mismatch explicit."
+          },
+          {
+            "criterion_number": 3,
+            "criterion": "Make benefits, opportunity costs, fairness tensions, authority or agreement conditions, uncertainty and next evidence concrete; do not invent weights or promise a unique optimum.",
+            "score": 2,
+            "supporting_excerpts": [
+              "Displaces local groups from the times they need and locks in that loss for a year",
+              "do not let total hours conceal exclusion",
+              "Have the authorized decision-makers negotiate",
+              "Make concessions conditional on adequate funding and preserved access.",
+              "Before signing, obtain local evening demand, the maintenance funding gap and urgency, staffing needs, and the sponsor's flexibility."
+            ],
+            "rationale": "Makes funding benefits, displaced access, lost flexibility and fairness concrete; identifies decision authority and agreement conditions. Requests evidence about feasibility and funding risk, and does not invent weights or claim a unique optimum."
+          }
+        ],
+        "material_unsupported_claims": [],
+        "unsupported_claim_assessment": "Proposals and unknowns are framed as checks, conditions or evidence to obtain; no material factual outcome or guaranteed feasibility is invented.",
+        "operator_audit": {
+          "selected_operators": [
+            "goals",
+            "constraints",
+            "cost_benefit",
+            "alternative_generation",
+            "negotiation"
+          ],
+          "visible_answer_contributions": {
+            "goals": "Track booked room-hours as a secondary measure.",
+            "constraints": "Activities must end by 9 pm.",
+            "cost_benefit": "Displaces local groups from the times they need and locks in that loss for a year",
+            "alternative_generation": "Compare three packages using the same criteria",
+            "negotiation": "protected recurring local slots, limited exclusivity, and a review or exit clause"
+          },
+          "noncontributing_operators": [],
+          "exact_operator_id_occurrences_in_answer": {
+            "goals": 0,
+            "constraints": 1,
+            "cost_benefit": 0,
+            "alternative_generation": 0,
+            "negotiation": 0
+          },
+          "hc_names_used_as_labels_in_answer": false,
+          "operator_labeling_confined_to_separate_audit": true,
+          "all_exact_ids_absent_from_answer": false,
+          "note": "The literal ID 'constraints' occurs once in the ordinary phrase 'fixed operating constraints'. Thus exact-string names are not strictly audit-only, but this is ordinary domain prose, not an HC label or exposed framework. Other selected IDs are absent."
+        },
+        "verbosity": {
+          "whitespace_word_count": 424,
+          "assessment": "Longest answer, with some repetition of protected access and funding conditions between the opening and closing. Mild trimming is possible, but the table and decision conditions contribute to the task; no verbosity failure."
+        },
+        "confidence": "High for frozen-rubric textual coverage."
+      }
+    ],
+    "summary": {
+      "passed_cases": 3,
+      "total_cases": 3,
+      "criteria_scoring_2": 9,
+      "total_criteria": 9,
+      "total_score": 18,
+      "maximum_score": 18,
+      "material_unsupported_claims": 0,
+      "noncontributing_selected_operators": 0,
+      "confidence": "High for these frozen-rubric answer-text grades; low for causal or population-level performance claims."
+    },
+    "limitations": [
+      "The frozen-before-generation status is reported by the rubric/setup, not independently established by the permitted artifact contents or timestamps.",
+      "Only three fresh-context single runs were supplied, with no baseline. These grades cannot establish a skill-caused improvement, a success rate, repeatability, or generalization.",
+      "Exact model IDs were not recorded, which limits reproducibility and model-level attribution.",
+      "The reads/access audit is solver self-report on a shared filesystem. It does not independently prove access isolation or the absence of additional reads.",
+      "The setup reports runtime copies containing authored examples/references but no evals, and cases differing from worked examples. Runtime contents and example novelty were not independently inspected under this read restriction.",
+      "All five reported runtime hash entries match across the three permitted manifests. No source contents were read or rehashed, so this is manifest agreement, not independent runtime integrity verification.",
+      "No physical kiosk prototype, astronomical data, facility schedule, budget quote or stakeholder agreement was executed or validated. Passing means the advice states the required checks and conditions, not that real-world outcomes are proven."
+    ]
+  },
+  "domain_fact_check": {
+    "case": "observatory",
+    "source": "https://ssd.jpl.nasa.gov/horizons/manual.html",
+    "location": "Definition of Observer Table Quantities / Statistical Uncertainties",
+    "checked_claim": "Formal asteroid/comet orbit uncertainties assume random observational errors; systematic timing, reduction, or star-catalog errors can make them optimistic.",
+    "scope": "Supports checking observational uncertainty and systematic artifacts. It does not validate a deflection claim, the instrument, or every proposed observation."
+  },
+  "limitations": [
+    "Three single runs without a baseline cannot establish skill-caused improvement, repeatability, success rate, or broad generalization.",
+    "Exact model versions and independently enforced per-case access traces were not recorded.",
+    "These hypothetical scenarios require feasible proposals and stated checks; no kiosk prototype, astronomy data, schedule, budget quote, or agreement was validated.",
+    "The community-room answer treats the 12-hour limit as covering preparation and administration too. This conservative resource-accounting assumption was not explicit in the prompt and needs confirmation; the recorded answer and grades remain unedited.",
+    "Surface scenarios are new, but their reasoning structures overlap earlier cases and authored examples. The kiosk is a regression check of the physical-cue revision. Self-reported logs show no reads of optional examples or references."
+  ],
+  "record_interpretation": "Grades apply only to the recorded runtime file digests, not to later revisions. Later instruction wording and relative-root fixes received static tests and review only; no recorded behavioral run used the final entrypoint wording."
+}
