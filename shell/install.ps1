@@ -37,13 +37,22 @@ New-Item -ItemType Directory -Force -Path (Split-Path $PROFILE) | Out-Null
 if (-not (Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE | Out-Null }
 $content = Get-Content $PROFILE -Raw
 if ($null -eq $content) { $content = '' }
-if ($content.Contains($begin)) {
-    $pattern = [regex]::Escape($begin) + '[\s\S]*?' + [regex]::Escape($end)
-    if (($content -match $pattern) -and ($Matches[0] -eq $block)) {
+$pattern = [regex]::Escape($begin) + '[\s\S]*?' + [regex]::Escape($end)
+$found = [regex]::Match($content, $pattern)
+if ($found.Success) {
+    # The block must stay last, as in shell/install.sh: a line that another
+    # installer appends after it can undo what the block sets up.
+    $trailing = $content.Substring($found.Index + $found.Length).Trim()
+    if (($found.Value -eq $block) -and (-not $trailing)) {
         Ok 'devenv block already present'
     } else {
-        Set-Content $PROFILE ([regex]::Replace($content, $pattern, $block))
-        Ok 'devenv block updated'
+        # Take the block out, with the blank lines that followed it, and
+        # write it again at the end.
+        $rest = [regex]::Replace($content, $pattern + '(\r?\n)*', '').TrimEnd()
+        if ($rest) { $rest += "`r`n`r`n" }
+        Set-Content $PROFILE ($rest + $block)
+        if ($found.Value -eq $block) { Ok "devenv block moved to the end of $PROFILE" }
+        else { Ok 'devenv block updated' }
     }
 } else {
     Add-Content $PROFILE "`r`n$block`r`n"
