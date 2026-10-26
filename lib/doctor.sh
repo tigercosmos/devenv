@@ -19,9 +19,10 @@ check_tool() {   # check_tool NAME VERSION-CMD...
 log "dependencies"
 check_tool gh gh --version
 check_tool codex codex --version
-if [ "$(command -v codex 2>/dev/null)" = "$LOCAL_BIN/codex" ]; then
-    if [ -x "$LOCAL_BIN/codex-code-mode-host" ]; then ok "codex-code-mode-host  ($LOCAL_BIN/codex-code-mode-host)"
-    else fail "codex-code-mode-host missing next to $LOCAL_BIN/codex (run: make deps)"; rc=1; fi
+# A bare codex binary refuses to start without its package
+# (codex-package.json one level above bin/codex).
+if [ "$(command -v codex 2>/dev/null)" = "$LOCAL_BIN/codex" ] && [ ! -L "$LOCAL_BIN/codex" ]; then
+    fail "$LOCAL_BIN/codex is a bare binary without its package (run: make deps)"; rc=1
 fi
 check_tool claude claude --version
 check_tool agent agent --version

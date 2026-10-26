@@ -23,7 +23,7 @@ Then open a new terminal. Tools that are already installed are left alone;
 `devenv update` (or `FORCE=1 make install`) pulls this repository and
 upgrades everything. The `devenv` command manages the environment afterwards;
 see [The devenv command](#the-devenv-command).
-Codex is installed from its official native release and does not require npm.
+Codex is installed with its official standalone installer and does not require npm.
 The copy in `~/.local/bin` takes precedence over npm or Homebrew copies.
 
 On the first macOS or Linux run, `make install` asks whether this machine is a
@@ -44,7 +44,7 @@ newer. Windows does not install `cred-forward`.
 
 | Step | Target | Installs | Where |
 |------|--------|----------|-------|
-| 1 | `make deps` | `gh`, native-release `codex` and its `codex-code-mode-host` helper, `claude`, cursor `agent` | `~/.local/bin` (gh via Homebrew on macOS, winget on Windows) |
+| 1 | `make deps` | `gh`, standalone `codex` (package under `~/.codex/packages`), `claude`, cursor `agent` | `~/.local/bin` (gh via Homebrew on macOS, winget on Windows) |
 | 2 | `make skills` | [codexmon](https://github.com/tigercosmos/codexmon), [code-cortex-mcp](https://github.com/tigercosmos/code-cortex-mcp), the skills in [skills/](skills/) | binaries in `~/.local/bin`, skills in `~/.claude/skills`, linked into `~/.codex/skills`, `~/.agents/skills`, `~/.cursor/skills` |
 | 3 | `make scripts` | the utility scripts in [scripts/](scripts/) | on `PATH` via step 4 |
 | 4 | `make shell` | a sourced block in the login profile | macOS `~/.zprofile`, Linux `~/.bashrc` and `~/.profile`, Windows `$PROFILE` |

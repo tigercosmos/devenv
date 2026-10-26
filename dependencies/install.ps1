@@ -29,28 +29,39 @@ function Install-Gh {
     Ok "$((gh --version)[0])"
 }
 
+# Codex now runs only from its "package" layout (codex.exe plus rg.exe, the
+# sandbox helpers, and codex-resources); a bare release binary refuses to
+# start with "this CLI has no complete local package". The official installer
+# puts the package under %LOCALAPPDATA%\Programs\OpenAI\Codex and adds its
+# bin to the user PATH.
+function Invoke-CodexInstaller {
+    $tmp = New-TempDir
+    $script = Join-Path $tmp 'install.ps1'
+    Fetch 'https://github.com/openai/codex/releases/latest/download/install.ps1' $script
+    # A separate process keeps the installer's StrictMode out of this session.
+    $env:CODEX_NON_INTERACTIVE = '1'
+    try {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $script
+        if ($LASTEXITCODE -ne 0) { throw "the Codex installer exited with $LASTEXITCODE" }
+    } finally {
+        Remove-Item Env:CODEX_NON_INTERACTIVE -ErrorAction SilentlyContinue
+        Remove-Item $tmp -Recurse -Force
+    }
+}
+
 function Install-Codex {
     Log 'codex (OpenAI Codex CLI)'
-    if ((Have codex) -and -not $Force) { Ok "already installed: $(codex --version)"; return }
-    $arch = if ((Get-Arch) -eq 'arm64') { 'aarch64' } else { 'x86_64' }
-    $tmp = New-TempDir
-    # codex-code-mode-host is a separate release asset that codex expects
-    # next to itself (plugin management, "code mode").
-    foreach ($name in 'codex', 'codex-code-mode-host') {
-        $dir = Join-Path $tmp $name
-        Fetch "https://github.com/openai/codex/releases/latest/download/$name-$arch-pc-windows-msvc.exe.zip" "$dir.zip"
-        Expand-Archive "$dir.zip" -DestinationPath $dir -Force
-        $binary = Join-Path $dir "$name-$arch-pc-windows-msvc.exe"
-        if (-not (Test-Path $binary)) { throw "$name executable not found in its release archive" }
-        Install-Bin $binary "$name.exe"
-        if ($name -eq 'codex') {
-            foreach ($helper in 'codex-command-runner.exe', 'codex-windows-sandbox-setup.exe') {
-                $helperPath = Join-Path $dir $helper
-                if (Test-Path $helperPath) { Install-Bin $helperPath $helper }
-            }
+    # An earlier devenv copied bare binaries into ~\.local\bin, where they
+    # shadow the packaged install; they are devenv's own copies, so drop them.
+    $legacy = (Have codex) -and ((Get-Command codex).Source -eq (Join-Path $script:LocalBin 'codex.exe'))
+    if ((Have codex) -and -not $legacy -and -not $Force) { Ok "already installed: $(codex --version)"; return }
+    if ($legacy) {
+        Warn "$(Join-Path $script:LocalBin 'codex.exe') is a bare binary without its package; reinstalling"
+        foreach ($name in 'codex.exe', 'codex-code-mode-host.exe', 'codex-command-runner.exe', 'codex-windows-sandbox-setup.exe') {
+            Remove-Item (Join-Path $script:LocalBin $name) -Force -ErrorAction SilentlyContinue
         }
     }
-    Remove-Item $tmp -Recurse -Force
+    Invoke-CodexInstaller
     Refresh-Path
     Ok "$(codex --version)"
 }

@@ -42,38 +42,29 @@ install_gh() {
 }
 
 # ---- codex ----------------------------------------------------------------
-codex_from_release() {
-    local triple
-    case "$ARCH" in arm64) triple=aarch64 ;; amd64) triple=x86_64 ;; esac
-    case "$OS" in
-        macos) triple="${triple}-apple-darwin" ;;
-        linux) triple="${triple}-unknown-linux-musl" ;;
-        *) die "codex: use dependencies/install.ps1 on Windows" ;;
-    esac
-    mktmp
-    # The release ships helper binaries as separate assets. codex looks for
-    # codex-code-mode-host next to itself (plugin management, "code mode");
-    # without it `codex` reports the executable as missing.
-    local name
-    for name in codex codex-code-mode-host; do
-        fetch "https://github.com/openai/codex/releases/latest/download/${name}-${triple}.tar.gz" "$TMPD/$name.tar.gz"
-        tar -xzf "$TMPD/$name.tar.gz" -C "$TMPD"
-        install_bin "$TMPD/${name}-${triple}" "$name"
-    done
+# Codex now runs only from its "package" layout (bin/, codex-path/rg,
+# codex-resources/, codex-package.json); a bare release binary refuses to
+# start with "this CLI has no complete local package". The official installer
+# unpacks the package under ~/.codex/packages/standalone and symlinks
+# ~/.local/bin/codex (and codex-code-mode-host) into it.
+codex_from_installer() {
+    fetch_stdout https://github.com/openai/codex/releases/latest/download/install.sh \
+        | CODEX_NON_INTERACTIVE=1 sh
 }
 
 install_codex() {
     log "codex (OpenAI Codex CLI)"
     if have codex && [ "$FORCE" != 1 ]; then
-        ok "already installed: $(codex --version 2>/dev/null | head -1)"
-        # A release install from an earlier devenv lacks the helper; add it.
-        if [ "$(command -v codex)" = "$LOCAL_BIN/codex" ] && [ ! -x "$LOCAL_BIN/codex-code-mode-host" ]; then
-            warn "codex-code-mode-host is missing next to $LOCAL_BIN/codex; installing"
-            codex_from_release
+        # An earlier devenv copied bare binaries into ~/.local/bin; the
+        # official installer replaces them with symlinks into the package.
+        if [ "$(command -v codex)" = "$LOCAL_BIN/codex" ] && [ ! -L "$LOCAL_BIN/codex" ]; then
+            warn "$LOCAL_BIN/codex is a bare binary without its package; reinstalling"
+            codex_from_installer
         fi
+        ok "already installed: $(codex --version 2>/dev/null | head -1)"
         return
     fi
-    codex_from_release
+    codex_from_installer
     ok "$(codex --version 2>/dev/null | head -1)"
 }
 

@@ -10,9 +10,10 @@ function Check-Tool($name, [scriptblock]$version) {
 Log 'dependencies'
 Check-Tool gh     { gh --version }
 Check-Tool codex  { codex --version }
+# A bare codex.exe refuses to start without its package; an earlier devenv
+# copied one into ~\.local\bin.
 if ((Have codex) -and ((Get-Command codex).Source -eq (Join-Path $script:LocalBin 'codex.exe'))) {
-    $h = Join-Path $script:LocalBin 'codex-code-mode-host.exe'
-    if (Test-Path $h) { Ok "codex-code-mode-host  ($h)" } else { Fail "codex-code-mode-host missing next to codex.exe (run: dependencies\install.ps1 codex)"; $script:rc = 1 }
+    Fail "codex.exe in $script:LocalBin is a bare binary without its package (run: dependencies\install.ps1 -Only codex)"; $script:rc = 1
 }
 Check-Tool claude { claude --version }
 Check-Tool agent  { agent --version }
